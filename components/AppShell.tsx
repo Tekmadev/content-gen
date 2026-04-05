@@ -55,7 +55,7 @@ export default function AppShell({ children, user }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen flex bg-[var(--surface)]">
+    <div className="min-h-screen w-full flex bg-[var(--surface)] overflow-x-hidden">
       {/* ── Desktop sidebar ── */}
       <aside className="hidden md:flex w-56 flex-col fixed top-0 left-0 h-screen bg-white border-r border-[var(--border)] z-20">
         {/* Logo */}

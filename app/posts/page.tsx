@@ -91,7 +91,7 @@ export default function PostsPage() {
 
   return (
     <AppShell user={user}>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6 overflow-x-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <h1 className="text-xl font-semibold">All Posts</h1>
           <button
@@ -103,15 +103,15 @@ export default function PostsPage() {
         </div>
 
         {/* Search + filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search posts…"
-            className="flex-1 px-4 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
           />
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f}
