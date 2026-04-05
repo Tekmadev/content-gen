@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:help.blotato.com)",
+      "WebFetch(domain:supabase.com)",
+      "Bash(npm show:*)",
+      "Bash(npx create-next-app@latest --help)",
+      "Bash(npx create-next-app@latest /tmp/nextjs-test --typescript --tailwind --app --yes --disable-git)",
+      "Read(//tmp/**)",
+      "Read(//private/tmp/nextjs-test/**)",
+      "Read(//private/tmp/nextjs-test/app/**)",
+      "Bash(node -e ':*)"
+    ]
+  }
+}
