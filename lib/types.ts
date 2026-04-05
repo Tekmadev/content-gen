@@ -14,6 +14,9 @@ export interface ExtractedContent {
   status: 'queued' | 'processing' | 'completed' | 'failed'
   content?: string
   title?: string
+  error?: string
+  message?: string
+  reason?: string
 }
 
 export interface GeneratedPosts {

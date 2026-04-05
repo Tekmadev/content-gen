@@ -49,7 +49,10 @@ export async function pollExtraction(id: string, maxWaitMs = 120_000): Promise<E
     if (!res.ok) throw new Error(`Blotato poll extraction failed: ${res.status}`)
     const data: ExtractedContent = await res.json()
     if (data.status === 'completed') return data
-    if (data.status === 'failed') throw new Error('Blotato content extraction failed')
+    if (data.status === 'failed') {
+      const reason = data.error ?? data.message ?? data.reason ?? 'unknown reason'
+      throw new Error(`Blotato content extraction failed: ${reason}`)
+    }
     await sleep(3000)
   }
   throw new Error('Blotato extraction timed out')
