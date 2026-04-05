@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateAllPosts } from '@/lib/anthropic'
 
+export const maxDuration = 60
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -12,6 +14,9 @@ export async function POST(request: Request) {
   if (!draftId || !content) {
     return NextResponse.json({ error: 'draftId and content are required' }, { status: 400 })
   }
+
+  // Reset to generating in case this is a retry
+  await supabase.from('posts_log').update({ status: 'generating', error_message: null }).eq('id', draftId)
 
   const posts = await generateAllPosts(content).catch(async (err: Error) => {
     await supabase

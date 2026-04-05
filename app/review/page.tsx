@@ -43,6 +43,7 @@ function ReviewPageInner() {
   })
   const [publishingPlatform, setPublishingPlatform] = useState<Platform | 'all' | null>(null)
   const [generatingVisual, setGeneratingVisual] = useState<Platform | null>(null)
+  const [visualErrors, setVisualErrors] = useState<Record<Platform, string>>({ linkedin: '', instagram: '', x: '' })
   const [retrying, setRetrying] = useState(false)
 
   const [loading, setLoading] = useState(true)
@@ -120,20 +121,31 @@ function ReviewPageInner() {
     const templateId = selectedTemplates[platform]
     if (!templateId) return
     setGeneratingVisual(platform)
-    const res = await fetch('/api/visuals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        draftId,
-        content: draft.extracted_content,
-        linkedinTemplateId: platform === 'linkedin' ? templateId : undefined,
-        instagramTemplateId: platform === 'instagram' ? templateId : undefined,
-        xTemplateId: platform === 'x' ? templateId : undefined,
-      }),
-    })
-    if (res.ok) {
+    setVisualErrors((prev) => ({ ...prev, [platform]: '' }))
+    try {
+      const res = await fetch('/api/visuals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftId,
+          content: draft.extracted_content,
+          linkedinTemplateId: platform === 'linkedin' ? templateId : undefined,
+          instagramTemplateId: platform === 'instagram' ? templateId : undefined,
+          xTemplateId: platform === 'x' ? templateId : undefined,
+        }),
+      })
       const data = await res.json()
-      if (data[platform]) setVisuals((prev) => ({ ...prev, [platform]: data[platform] }))
+      // data[platform] is the stored Supabase URL, data.errors has any failures
+      if (data[platform]) {
+        setVisuals((prev) => ({ ...prev, [platform]: data[platform] }))
+      } else {
+        const errMsg = data.errors?.find((e: string) => e.startsWith(platform))
+          ?? data.errors?.[0]
+          ?? 'Visual generation failed — check your template in Blotato'
+        setVisualErrors((prev) => ({ ...prev, [platform]: errMsg }))
+      }
+    } catch {
+      setVisualErrors((prev) => ({ ...prev, [platform]: 'Network error generating visual' }))
     }
     setGeneratingVisual(null)
   }
@@ -238,8 +250,9 @@ function ReviewPageInner() {
     )
   }
 
-  // Failed state — show source info + retry
-  if (draft?.status === 'failed') {
+  // Failed state — only block if we have NO generated texts yet
+  const hasTexts = !!(draft?.linkedin_text || draft?.instagram_text || draft?.x_text)
+  if (draft?.status === 'failed' && !hasTexts) {
     return (
       <AppShell user={user}>
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-6">
@@ -514,10 +527,18 @@ function ReviewPageInner() {
                               type="button"
                               onClick={() => generateVisualForPlatform(platform)}
                               disabled={isGeneratingThisVisual}
-                              className="text-xs text-[var(--primary)] hover:underline disabled:opacity-50 text-left"
+                              className="text-xs text-[var(--primary)] hover:underline disabled:opacity-50 text-left flex items-center gap-1.5"
                             >
-                              {isGeneratingThisVisual ? 'Generating…' : visuals[platform] ? 'Regenerate visual' : 'Generate visual'}
+                              {isGeneratingThisVisual && (
+                                <span className="inline-block w-3 h-3 border border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+                              )}
+                              {isGeneratingThisVisual ? 'Generating visual…' : visuals[platform] ? 'Regenerate visual' : 'Generate visual'}
                             </button>
+                          )}
+                          {visualErrors[platform] && (
+                            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                              {visualErrors[platform]}
+                            </p>
                           )}
 
                           {visuals[platform] && (

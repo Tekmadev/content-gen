@@ -263,7 +263,9 @@ export default function DashboardPage() {
                         {post.source_url || post.source_content?.slice(0, 60) || '—'}
                       </span>
                       <span className="text-xs text-[var(--muted)]">
-                        {new Date(post.created_at).toLocaleDateString()}
+                        {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {' · '}
+                        {new Date(post.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                       </span>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${sc.cls}`}>

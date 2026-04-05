@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { publishPost, pollPost } from '@/lib/blotato'
+
+export const maxDuration = 60
 import { appendLog } from '@/lib/posts-log'
 import type { PostLogEntry, SourceType } from '@/lib/types'
 

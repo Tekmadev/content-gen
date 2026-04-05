@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateVisual } from '@/lib/blotato'
 
+export const maxDuration = 60
+
 const BUCKET = 'Content'
 
 function isVideo(url: string): boolean {

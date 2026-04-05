@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { extractContent } from '@/lib/blotato'
 import type { SourceInput } from '@/lib/types'
 
+export const maxDuration = 60
+
 const BUCKET = 'Content'
 
 async function uploadPdf(

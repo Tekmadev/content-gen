@@ -8,6 +8,7 @@ import type { PostDraft } from '@/lib/types'
 
 const STATUS_FILTERS = ['all', 'ready', 'published', 'failed', 'generating'] as const
 type Filter = typeof STATUS_FILTERS[number]
+type SortKey = 'newest' | 'oldest' | 'platform'
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   published: { label: 'Published', cls: 'bg-green-100 text-green-700' },
@@ -34,6 +35,7 @@ export default function PostsPage() {
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<SortKey>('newest')
 
   const fetchPosts = useCallback(async () => {
     const res = await fetch('/api/posts')
@@ -67,7 +69,16 @@ export default function PostsPage() {
     router.push(`/review?draftId=${postId}`)
   }
 
-  const filtered = posts.filter((p) => {
+  const sortedPosts = [...posts].sort((a, b) => {
+    if (sort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    if (sort === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    // platform: published ones first, grouped by which platforms are done
+    const aScore = (a.linkedin_url ? 4 : 0) + (a.instagram_url ? 2 : 0) + (a.x_url ? 1 : 0)
+    const bScore = (b.linkedin_url ? 4 : 0) + (b.instagram_url ? 2 : 0) + (b.x_url ? 1 : 0)
+    return bScore - aScore
+  })
+
+  const filtered = sortedPosts.filter((p) => {
     const matchesFilter = filter === 'all' || p.status === filter
     const term = search.toLowerCase()
     const matchesSearch = !term || (
@@ -102,8 +113,8 @@ export default function PostsPage() {
           </button>
         </div>
 
-        {/* Search + filters */}
-        <div className="flex flex-col gap-3">
+        {/* Search + filters + sort */}
+        <div className="flex flex-col gap-2">
           <input
             type="text"
             value={search}
@@ -111,20 +122,31 @@ export default function PostsPage() {
             placeholder="Search posts…"
             className="w-full px-4 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
           />
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
-                  filter === f
-                    ? 'bg-[var(--primary)] text-white'
-                    : 'bg-white text-[var(--muted)] border border-[var(--border)] hover:text-[var(--foreground)]'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none flex-1">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-colors ${
+                    filter === f
+                      ? 'bg-[var(--primary)] text-white'
+                      : 'bg-white text-[var(--muted)] border border-[var(--border)] hover:text-[var(--foreground)]'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="text-xs border border-[var(--border)] rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--primary)] bg-white flex-shrink-0"
+            >
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="platform">By platform</option>
+            </select>
           </div>
         </div>
 
@@ -178,8 +200,9 @@ export default function PostsPage() {
                         {post.source_url || post.source_content?.slice(0, 80) || '—'}
                       </p>
                     </div>
-                    <span className="text-xs text-[var(--muted)] whitespace-nowrap flex-shrink-0">
-                      {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    <span className="text-xs text-[var(--muted)] whitespace-nowrap flex-shrink-0 text-right">
+                      <span className="block">{new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      <span className="block">{new Date(post.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
                     </span>
                   </div>
 

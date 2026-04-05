@@ -4,6 +4,8 @@ import { extractContent } from '@/lib/blotato'
 import { generateAllPosts } from '@/lib/anthropic'
 import type { SourceInput } from '@/lib/types'
 
+export const maxDuration = 60
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
