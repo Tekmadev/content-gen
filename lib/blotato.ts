@@ -97,20 +97,32 @@ export async function pollVisual(id: string, maxWaitMs = 180_000): Promise<Visua
     const res = await fetch(`${BASE_URL}/videos/creations/${id}`, {
       headers: getHeaders(),
     })
-    if (!res.ok) throw new Error(`Blotato poll visual failed: ${res.status}`)
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`Blotato poll visual failed: ${res.status} — ${body}`)
+    }
     const data: Visual = await res.json()
     if (data.status === 'done') return data
-    if (data.status === 'creation-from-template-failed')
-      throw new Error('Blotato visual generation failed')
+    if (data.status === 'creation-from-template-failed') {
+      const d = data as unknown as Record<string, unknown>
+      const reason = d.error ?? d.message ?? 'unknown'
+      throw new Error(`Blotato visual generation failed: ${reason}`)
+    }
     await sleep(5000)
   }
   throw new Error('Blotato visual generation timed out')
 }
 
-export async function generateVisual(templateId: string, prompt: string): Promise<string> {
+export async function generateVisual(templateId: string, prompt: string): Promise<{ url: string; isVideo: boolean }> {
   const id = await startVisual(templateId, prompt)
   const visual = await pollVisual(id)
-  return visual.mediaUrl ?? visual.imageUrls?.[0] ?? ''
+  // Prefer a static image frame if available (imageUrls), fall back to video (mediaUrl)
+  // imageUrls contains rendered frame images even for video templates
+  const imageUrl = visual.imageUrls?.[0]
+  const videoUrl = visual.mediaUrl
+  if (imageUrl) return { url: imageUrl, isVideo: false }
+  if (videoUrl) return { url: videoUrl, isVideo: true }
+  return { url: '', isVideo: false }
 }
 
 // ── Accounts ───────────────────────────────────────────────────────────────

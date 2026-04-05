@@ -6,22 +6,22 @@ export const maxDuration = 60
 
 const BUCKET = 'Content'
 
-function isVideo(url: string): boolean {
-  return /\.(mp4|webm|mov|avi)(\?|$)/i.test(url)
-}
-
 async function downloadAndStore(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  blobataUrl: string,
-  storagePath: string
+  blotatoUrl: string,
+  basePath: string  // path without extension, e.g. "userid/draftid/linkedin"
 ): Promise<string> {
-  // Download the visual from Blotato
-  const res = await fetch(blobataUrl)
+  const res = await fetch(blotatoUrl)
   if (!res.ok) throw new Error(`Failed to download visual: ${res.status}`)
-  const buffer = Buffer.from(await res.arrayBuffer())
-  const contentType = res.headers.get('content-type') ?? (isVideo(blobataUrl) ? 'video/mp4' : 'image/jpeg')
 
-  // Upload to Supabase Storage
+  // Use content-type header to reliably detect video vs image
+  const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+  const isVid = contentType.startsWith('video/')
+  const ext = isVid ? 'mp4' : contentType.includes('png') ? 'png' : 'jpg'
+  const storagePath = `${basePath}.${ext}`
+
+  const buffer = Buffer.from(await res.arrayBuffer())
+
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(storagePath, buffer, { contentType, upsert: true })
@@ -72,12 +72,11 @@ export async function POST(request: Request) {
     visualJobs.map(async ({ key, templateId, prompt }) => {
       if (!templateId) return
       try {
-        const blotatoUrl = await generateVisual(templateId, prompt)
-        if (!blotatoUrl) return
+        const visual = await generateVisual(templateId, prompt)
+        if (!visual.url) return
 
-        const ext = isVideo(blotatoUrl) ? 'mp4' : 'jpg'
-        const storagePath = `${user.id}/${draftId}/${key}.${ext}`
-        const storedUrl = await downloadAndStore(supabase, blotatoUrl, storagePath)
+        const basePath = `${user.id}/${draftId}/${key}`
+        const storedUrl = await downloadAndStore(supabase, visual.url, basePath)
         results[key] = storedUrl
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
