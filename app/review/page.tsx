@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
@@ -19,7 +19,7 @@ const PLATFORM_CONFIG = {
 type Platform = keyof typeof PLATFORM_CONFIG
 type VisualType = 'none' | 'image' | 'video'
 
-export default function ReviewPage() {
+function ReviewPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const draftId = searchParams.get('draftId')
@@ -453,7 +453,7 @@ export default function ReviewPage() {
                           >
                             <option value="">Select account</option>
                             {platformAccounts.map((a) => (
-                              <option key={a.id} value={a.id}>{a.fullname || a.username || a.id}</option>
+                              <option key={a.id} value={a.id}>{a.displayName || a.username || a.id}</option>
                             ))}
                           </select>
                           {subAccounts.length > 0 && (
@@ -572,5 +572,13 @@ export default function ReviewPage() {
         )}
       </div>
     </AppShell>
+  )
+}
+
+export default function ReviewPage() {
+  return (
+    <Suspense>
+      <ReviewPageInner />
+    </Suspense>
   )
 }

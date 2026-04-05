@@ -9,7 +9,8 @@
       "Read(//tmp/**)",
       "Read(//private/tmp/nextjs-test/**)",
       "Read(//private/tmp/nextjs-test/app/**)",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(npm run:*)"
     ]
   }
 }

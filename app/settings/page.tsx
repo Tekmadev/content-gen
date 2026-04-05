@@ -36,6 +36,7 @@ export default function SettingsPage() {
   const supabase = useRef(createClient()).current
 
   const [user, setUser] = useState<{
+    id?: string
     email?: string
     user_metadata?: { avatar_url?: string; full_name?: string; email?: string }
   } | null>(null)
