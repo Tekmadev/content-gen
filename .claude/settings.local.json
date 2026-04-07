@@ -14,7 +14,8 @@
       "Bash(ls /Users/shajeed/Business/Tekmadev/Blotato/.env*)",
       "Bash(npx tsc:*)",
       "Bash(npm install:*)",
-      "Read(//Users/shajeed/.cache/plugins/github.com-vercel-vercel-plugin/skills/nextjs/**)"
+      "Read(//Users/shajeed/.cache/plugins/github.com-vercel-vercel-plugin/skills/nextjs/**)",
+      "Bash(pkill -f \"next dev\")"
     ]
   }
 }

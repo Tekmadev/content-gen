@@ -7,7 +7,7 @@ const PUBLIC_ROUTES = ['/login', '/pricing', '/terms', '/privacy']
 // Routes that authenticated users can access even without a subscription
 const AUTH_ONLY_ROUTES = ['/onboarding', '/billing', '/auth']
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -91,8 +91,8 @@ export async function proxy(request: NextRequest) {
   return supabaseResponse
 }
 
-export const proxyConfig = {
+export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
