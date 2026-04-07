@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { generateVisual } from '@/lib/blotato'
+import { getUserProfile, getBlotatoKey, checkAndDeductCredits, trackEvent, CREDIT_COSTS } from '@/lib/user-profile'
 
 export const maxDuration = 60
 
 const BUCKET = 'Content'
 
 async function downloadAndStore(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   blotatoUrl: string,
   basePath: string  // path without extension, e.g. "userid/draftid/linkedin"
 ): Promise<string> {
+  const adminSupabase = createAdminClient()
+
   const res = await fetch(blotatoUrl)
   if (!res.ok) throw new Error(`Failed to download visual: ${res.status}`)
 
@@ -22,13 +25,13 @@ async function downloadAndStore(
 
   const buffer = Buffer.from(await res.arrayBuffer())
 
-  const { error } = await supabase.storage
+  const { error } = await adminSupabase.storage
     .from(BUCKET)
     .upload(storagePath, buffer, { contentType, upsert: true })
 
   if (error) throw new Error(`Supabase storage upload failed: ${error.message}`)
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath)
+  const { data } = adminSupabase.storage.from(BUCKET).getPublicUrl(storagePath)
   return data.publicUrl
 }
 
@@ -55,6 +58,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'draftId and content are required' }, { status: 400 })
   }
 
+  // Deduct credits (visual generation = 3 credits)
+  const usageError = await checkAndDeductCredits(user.id, CREDIT_COSTS.visual, 'visual', draftId)
+  if (usageError) return NextResponse.json({ error: usageError }, { status: 402 })
+
+  const profile = await getUserProfile(user.id)
+  const blotatoKey = getBlotatoKey(profile)
+
   const results: {
     linkedin?: string
     instagram?: string
@@ -72,11 +82,11 @@ export async function POST(request: Request) {
     visualJobs.map(async ({ key, templateId, prompt }) => {
       if (!templateId) return
       try {
-        const visual = await generateVisual(templateId, prompt)
+        const visual = await generateVisual(templateId, prompt, blotatoKey)
         if (!visual.url) return
 
         const basePath = `${user.id}/${draftId}/${key}`
-        const storedUrl = await downloadAndStore(supabase, visual.url, basePath)
+        const storedUrl = await downloadAndStore(visual.url, basePath)
         results[key] = storedUrl
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -91,8 +101,11 @@ export async function POST(request: Request) {
   if (results.x) update.x_visual_url = results.x
 
   if (Object.keys(update).length > 0) {
-    await supabase.from('posts_log').update(update).eq('id', draftId)
+    await supabase.from('posts_log').update(update).eq('id', draftId).eq('user_id', user.id)
   }
+
+  const generatedPlatforms = Object.keys(update).map((k) => k.replace('_visual_url', ''))
+  trackEvent(user.id, 'visual_generated', { draft_id: draftId, platforms: generatedPlatforms })
 
   return NextResponse.json(results)
 }

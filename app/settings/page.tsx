@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
 import UserAvatar from '@/components/UserAvatar'
+import type { BrandSettings } from '@/lib/types'
 
 interface Account {
   id: string
@@ -13,6 +14,29 @@ interface Account {
   fullname?: string
   displayName?: string
   subAccounts: { id: string; name: string }[]
+}
+
+const FONT_OPTIONS = [
+  'Inter',
+  'Helvetica Neue',
+  'Montserrat',
+  'Playfair Display',
+  'Georgia',
+  'Raleway',
+  'Roboto',
+  'Source Serif',
+  'DM Sans',
+  'Space Grotesk',
+]
+
+const DEFAULT_BRAND: BrandSettings = {
+  primary_color:    '#000000',
+  secondary_color:  '#ffffff',
+  accent_color:     '#F97316',
+  background_color: '#ffffff',
+  text_color:       '#111111',
+  font_family:      'Inter',
+  brand_name:       '',
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -44,15 +68,52 @@ export default function SettingsPage() {
   const [loadingAccounts, setLoadingAccounts] = useState(true)
   const [copied, setCopied] = useState(false)
 
+  // Brand settings
+  const [brand, setBrand] = useState<BrandSettings>(DEFAULT_BRAND)
+  const [savingBrand, setSavingBrand] = useState(false)
+  const [brandSaved, setBrandSaved] = useState(false)
+  const [brandError, setBrandError] = useState('')
+
+  const loadBrandSettings = useCallback(async () => {
+    const res = await fetch('/api/brand-settings')
+    if (res.ok) {
+      const data = await res.json()
+      setBrand({ ...DEFAULT_BRAND, ...data })
+    }
+  }, [])
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
+    loadBrandSettings()
 
     fetch('/api/accounts')
       .then((r) => r.json())
       .then((data) => setAccounts(Array.isArray(data) ? data : []))
       .catch(() => {})
       .finally(() => setLoadingAccounts(false))
-  }, [])
+  }, [loadBrandSettings])
+
+  async function saveBrandSettings() {
+    setSavingBrand(true)
+    setBrandError('')
+    setBrandSaved(false)
+    try {
+      const res = await fetch('/api/brand-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(brand),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || 'Save failed')
+      }
+      setBrandSaved(true)
+      setTimeout(() => setBrandSaved(false), 3000)
+    } catch (err) {
+      setBrandError(err instanceof Error ? err.message : 'Save failed')
+    }
+    setSavingBrand(false)
+  }
 
   async function copyUserId() {
     if (!user) return
@@ -202,6 +263,103 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </section>
+
+        {/* Brand Style */}
+        <section className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex flex-col gap-5">
+          <div>
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--muted)]">Brand Style</h2>
+            <p className="text-xs text-[var(--muted)] mt-1">
+              These colors and font are injected into every Nano Banana image generation so all visuals stay on-brand automatically.
+            </p>
+          </div>
+
+          {/* Preview strip */}
+          <div
+            className="w-full h-20 rounded-xl flex items-center justify-center text-sm font-semibold border border-[var(--border)] transition-all"
+            style={{ backgroundColor: brand.background_color, color: brand.text_color, fontFamily: brand.font_family }}
+          >
+            <span style={{ color: brand.accent_color, marginRight: 6 }}>✦</span>
+            {brand.brand_name || 'Your Brand'} — Preview
+          </div>
+
+          {/* Brand name */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-[var(--foreground)]">Brand / Company Name</label>
+            <input
+              type="text"
+              value={brand.brand_name}
+              onChange={(e) => setBrand((b) => ({ ...b, brand_name: e.target.value }))}
+              placeholder="e.g. Tekmadev"
+              className="w-full px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            />
+          </div>
+
+          {/* Colors grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {([
+              { key: 'primary_color',    label: 'Primary Color',    hint: 'Main brand color — buttons, key elements' },
+              { key: 'secondary_color',  label: 'Secondary Color',  hint: 'Supporting / contrast color' },
+              { key: 'accent_color',     label: 'Accent Color',     hint: 'Highlights, CTAs, decorative details' },
+              { key: 'background_color', label: 'Background Color', hint: 'Slide background' },
+              { key: 'text_color',       label: 'Text Color',       hint: 'Main body and headline text' },
+            ] as { key: keyof BrandSettings; label: string; hint: string }[]).map(({ key, label, hint }) => (
+              <div key={key} className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-[var(--foreground)]">{label}</label>
+                <p className="text-xs text-[var(--muted)]">{hint}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="relative flex-shrink-0">
+                    <input
+                      type="color"
+                      value={brand[key] as string}
+                      onChange={(e) => setBrand((b) => ({ ...b, [key]: e.target.value }))}
+                      className="w-10 h-10 rounded-lg border border-[var(--border)] cursor-pointer p-0.5 bg-white"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={brand[key] as string}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      if (/^#[0-9a-fA-F]{0,6}$/.test(val)) {
+                        setBrand((b) => ({ ...b, [key]: val }))
+                      }
+                    }}
+                    placeholder="#000000"
+                    className="flex-1 px-3 py-2 border border-[var(--border)] rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+            ))}
+
+            {/* Font picker */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-[var(--foreground)]">Font Family</label>
+              <p className="text-xs text-[var(--muted)]">Typography style for generated visuals</p>
+              <select
+                value={brand.font_family}
+                onChange={(e) => setBrand((b) => ({ ...b, font_family: e.target.value }))}
+                className="mt-1 w-full px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] bg-white"
+              >
+                {FONT_OPTIONS.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {brandError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{brandError}</p>
+          )}
+
+          <button
+            onClick={saveBrandSettings}
+            disabled={savingBrand}
+            className="self-start px-5 py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+          >
+            {savingBrand ? 'Saving…' : brandSaved ? '✓ Saved' : 'Save Brand Style'}
+          </button>
         </section>
 
         {/* API Keys info */}

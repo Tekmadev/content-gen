@@ -10,9 +10,9 @@ import type {
 
 const BASE_URL = 'https://backend.blotato.com/v2'
 
-function getHeaders() {
-  const key = process.env.BLOTATO_API_KEY
-  if (!key) throw new Error('BLOTATO_API_KEY is not set')
+function getHeaders(apiKey?: string) {
+  const key = apiKey ?? process.env.BLOTATO_API_KEY
+  if (!key) throw new Error('No Blotato API key configured. Add your key in Settings.')
   return {
     'Content-Type': 'application/json',
     'blotato-api-key': key,
@@ -25,11 +25,11 @@ async function sleep(ms: number) {
 
 // ── Content Extraction ─────────────────────────────────────────────────────
 
-export async function startExtraction(source: SourceInput): Promise<string> {
+export async function startExtraction(source: SourceInput, apiKey?: string): Promise<string> {
   const body = { source }
   const res = await fetch(`${BASE_URL}/source-resolutions-v3`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getHeaders(apiKey),
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -40,11 +40,11 @@ export async function startExtraction(source: SourceInput): Promise<string> {
   return data.id as string
 }
 
-export async function pollExtraction(id: string, maxWaitMs = 120_000): Promise<ExtractedContent> {
+export async function pollExtraction(id: string, maxWaitMs = 120_000, apiKey?: string): Promise<ExtractedContent> {
   const deadline = Date.now() + maxWaitMs
   while (Date.now() < deadline) {
     const res = await fetch(`${BASE_URL}/source-resolutions-v3/${id}`, {
-      headers: getHeaders(),
+      headers: getHeaders(apiKey),
     })
     if (!res.ok) throw new Error(`Blotato poll extraction failed: ${res.status}`)
     const data: ExtractedContent = await res.json()
@@ -58,16 +58,16 @@ export async function pollExtraction(id: string, maxWaitMs = 120_000): Promise<E
   throw new Error('Blotato extraction timed out')
 }
 
-export async function extractContent(source: SourceInput): Promise<ExtractedContent> {
-  const id = await startExtraction(source)
-  return pollExtraction(id)
+export async function extractContent(source: SourceInput, apiKey?: string): Promise<ExtractedContent> {
+  const id = await startExtraction(source, apiKey)
+  return pollExtraction(id, 120_000, apiKey)
 }
 
 // ── Templates ──────────────────────────────────────────────────────────────
 
-export async function listTemplates(): Promise<BlotatoTemplate[]> {
+export async function listTemplates(apiKey?: string): Promise<BlotatoTemplate[]> {
   const res = await fetch(`${BASE_URL}/videos/templates?fields=id,name,description`, {
-    headers: getHeaders(),
+    headers: getHeaders(apiKey),
   })
   if (!res.ok) throw new Error(`Blotato list templates failed: ${res.status}`)
   const data = await res.json()
@@ -77,10 +77,10 @@ export async function listTemplates(): Promise<BlotatoTemplate[]> {
 
 // ── Visual Generation ──────────────────────────────────────────────────────
 
-export async function startVisual(templateId: string, prompt: string): Promise<string> {
+export async function startVisual(templateId: string, prompt: string, apiKey?: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/videos/from-templates`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getHeaders(apiKey),
     body: JSON.stringify({ templateId, inputs: {}, prompt, render: true }),
   })
   if (!res.ok) {
@@ -91,11 +91,11 @@ export async function startVisual(templateId: string, prompt: string): Promise<s
   return data.id as string
 }
 
-export async function pollVisual(id: string, maxWaitMs = 180_000): Promise<Visual> {
+export async function pollVisual(id: string, maxWaitMs = 180_000, apiKey?: string): Promise<Visual> {
   const deadline = Date.now() + maxWaitMs
   while (Date.now() < deadline) {
     const res = await fetch(`${BASE_URL}/videos/creations/${id}`, {
-      headers: getHeaders(),
+      headers: getHeaders(apiKey),
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
@@ -113,9 +113,9 @@ export async function pollVisual(id: string, maxWaitMs = 180_000): Promise<Visua
   throw new Error('Blotato visual generation timed out')
 }
 
-export async function generateVisual(templateId: string, prompt: string): Promise<{ url: string; isVideo: boolean }> {
-  const id = await startVisual(templateId, prompt)
-  const visual = await pollVisual(id)
+export async function generateVisual(templateId: string, prompt: string, apiKey?: string): Promise<{ url: string; isVideo: boolean }> {
+  const id = await startVisual(templateId, prompt, apiKey)
+  const visual = await pollVisual(id, 180_000, apiKey)
   // Prefer a static image frame if available (imageUrls), fall back to video (mediaUrl)
   // imageUrls contains rendered frame images even for video templates
   const imageUrl = visual.imageUrls?.[0]
@@ -127,9 +127,9 @@ export async function generateVisual(templateId: string, prompt: string): Promis
 
 // ── Accounts ───────────────────────────────────────────────────────────────
 
-export async function listAccounts(): Promise<BlotatoAccount[]> {
+export async function listAccounts(apiKey?: string): Promise<BlotatoAccount[]> {
   const res = await fetch(`${BASE_URL}/users/me/accounts`, {
-    headers: getHeaders(),
+    headers: getHeaders(apiKey),
   })
   if (!res.ok) throw new Error(`Blotato list accounts failed: ${res.status}`)
   const data = await res.json()
@@ -137,9 +137,9 @@ export async function listAccounts(): Promise<BlotatoAccount[]> {
   return (data.items ?? data) as BlotatoAccount[]
 }
 
-export async function listSubAccounts(accountId: string): Promise<BlotatoSubAccount[]> {
+export async function listSubAccounts(accountId: string, apiKey?: string): Promise<BlotatoSubAccount[]> {
   const res = await fetch(`${BASE_URL}/users/me/accounts/${accountId}/subaccounts`, {
-    headers: getHeaders(),
+    headers: getHeaders(apiKey),
   })
   if (!res.ok) throw new Error(`Blotato list subaccounts failed: ${res.status}`)
   const data = await res.json()
@@ -159,7 +159,7 @@ export interface PublishPostInput {
   altText?: string       // for instagram
 }
 
-export async function publishPost(input: PublishPostInput): Promise<string> {
+export async function publishPost(input: PublishPostInput, apiKey?: string): Promise<string> {
   const post: Record<string, unknown> = {
     accountId: input.accountId,
     content: {
@@ -190,7 +190,7 @@ export async function publishPost(input: PublishPostInput): Promise<string> {
 
   const res = await fetch(`${BASE_URL}/posts`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: getHeaders(apiKey),
     body: JSON.stringify({ post }),
   })
 
@@ -203,11 +203,11 @@ export async function publishPost(input: PublishPostInput): Promise<string> {
   return data.postSubmissionId as string
 }
 
-export async function pollPost(submissionId: string, maxWaitMs = 120_000): Promise<PublishResult> {
+export async function pollPost(submissionId: string, maxWaitMs = 120_000, apiKey?: string): Promise<PublishResult> {
   const deadline = Date.now() + maxWaitMs
   while (Date.now() < deadline) {
     const res = await fetch(`${BASE_URL}/posts/${submissionId}`, {
-      headers: getHeaders(),
+      headers: getHeaders(apiKey),
     })
     if (!res.ok) throw new Error(`Blotato poll post failed: ${res.status}`)
     const data: PublishResult = await res.json()

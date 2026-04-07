@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
-import type { PostDraft, BlotatoAccount, BlotatoTemplate } from '@/lib/types'
+import { CAROUSEL_STYLES } from '@/lib/carousel-styles'
+import type { PostDraft, BlotatoAccount, BlotatoTemplate, CarouselStyle, CarouselSlide, CarouselPlatform } from '@/lib/types'
+import type { AspectRatio } from '@/lib/gemini'
 
 interface AccountWithSubs extends BlotatoAccount {
   subAccounts: { id: string; name: string }[]
@@ -18,6 +20,50 @@ const PLATFORM_CONFIG = {
 
 type Platform = keyof typeof PLATFORM_CONFIG
 type VisualType = 'none' | 'image' | 'video'
+type VisualSource = 'blotato' | 'nanobana'
+
+const PLATFORM_TO_CAROUSEL: Record<Platform, CarouselPlatform> = {
+  instagram: 'instagram_carousel',
+  linkedin:  'linkedin_image',
+  x:         'x_image',
+}
+
+const CAROUSEL_STYLE_KEYS = Object.keys(CAROUSEL_STYLES) as CarouselStyle[]
+
+interface RatioOption { value: AspectRatio; label: string; dims: string; orientation: string }
+
+const PLATFORM_RATIOS: Record<Platform, RatioOption[]> = {
+  instagram: [
+    { value: '3:4',  label: '3:4',  dims: '1080×1440', orientation: 'Portrait ✓' },
+    { value: '1:1',  label: '1:1',  dims: '1080×1080', orientation: 'Square' },
+    { value: '4:5',  label: '4:5',  dims: '1080×1350', orientation: 'Portrait' },
+  ],
+  linkedin: [
+    { value: '16:9', label: '16:9', dims: '1920×1080', orientation: 'Landscape ✓' },
+    { value: '1:1',  label: '1:1',  dims: '1080×1080', orientation: 'Square' },
+    { value: '4:5',  label: '4:5',  dims: '1080×1350', orientation: 'Portrait' },
+  ],
+  x: [
+    { value: '16:9', label: '16:9', dims: '1280×720',  orientation: 'Landscape ✓' },
+    { value: '1:1',  label: '1:1',  dims: '1080×1080', orientation: 'Square' },
+    { value: '2:1',  label: '2:1',  dims: '1500×750',  orientation: 'Wide' },
+  ],
+}
+
+const DEFAULT_RATIO: Record<Platform, AspectRatio> = {
+  instagram: '3:4',
+  linkedin:  '16:9',
+  x:         '16:9',
+}
+
+function ratioAspectClass(ratio: AspectRatio): string {
+  const map: Record<AspectRatio, string> = {
+    '1:1': 'aspect-square', '16:9': 'aspect-video',
+    '4:3': 'aspect-[4/3]',  '3:4': 'aspect-[3/4]',
+    '4:5': 'aspect-[4/5]',  '2:1': 'aspect-[2/1]',
+  }
+  return map[ratio] ?? 'aspect-video'
+}
 
 function ReviewPageInner() {
   const router = useRouter()
@@ -45,6 +91,15 @@ function ReviewPageInner() {
   const [generatingVisual, setGeneratingVisual] = useState<Platform | null>(null)
   const [visualErrors, setVisualErrors] = useState<Record<Platform, string>>({ linkedin: '', instagram: '', x: '' })
   const [retrying, setRetrying] = useState(false)
+
+  // ── Nano Banana carousel state ─────────────────────────────────────────────
+  const [visualSources, setVisualSources] = useState<Record<Platform, VisualSource>>({ linkedin: 'blotato', instagram: 'blotato', x: 'blotato' })
+  const [carouselStyles, setCarouselStyles] = useState<Record<Platform, CarouselStyle>>({ linkedin: 'dark_statement', instagram: 'dark_statement', x: 'dark_statement' })
+  const [carouselSlideCounts, setCarouselSlideCounts] = useState<Record<Platform, number>>({ linkedin: 1, instagram: 5, x: 1 })
+  const [carouselAspectRatios, setCarouselAspectRatios] = useState<Record<Platform, AspectRatio>>(DEFAULT_RATIO)
+  const [carouselResults, setCarouselResults] = useState<Record<Platform, CarouselSlide[]>>({ linkedin: [], instagram: [], x: [] })
+  const [generatingCarousel, setGeneratingCarousel] = useState<Platform | null>(null)
+  const [carouselErrors, setCarouselErrors] = useState<Record<Platform, string>>({ linkedin: '', instagram: '', x: '' })
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -148,6 +203,36 @@ function ReviewPageInner() {
       setVisualErrors((prev) => ({ ...prev, [platform]: 'Network error generating visual' }))
     }
     setGeneratingVisual(null)
+  }
+
+  async function handleGenerateCarousel(platform: Platform) {
+    const content = draft?.extracted_content || texts[platform]
+    if (!content) return
+    setGeneratingCarousel(platform)
+    setCarouselErrors((prev) => ({ ...prev, [platform]: '' }))
+    try {
+      const res = await fetch('/api/carousel/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          platform: PLATFORM_TO_CAROUSEL[platform],
+          numSlides: carouselSlideCounts[platform],
+          style: carouselStyles[platform],
+          aspectRatio: carouselAspectRatios[platform],
+          draftId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      const slides: CarouselSlide[] = data.slides ?? []
+      setCarouselResults((prev) => ({ ...prev, [platform]: slides }))
+      // Auto-set first slide as the visual
+      if (slides[0]) setVisuals((prev) => ({ ...prev, [platform]: slides[0].url }))
+    } catch (err) {
+      setCarouselErrors((prev) => ({ ...prev, [platform]: err instanceof Error ? err.message : 'Generation failed' }))
+    }
+    setGeneratingCarousel(null)
   }
 
   async function publishPlatform(platform: Platform) {
@@ -437,17 +522,25 @@ function ReviewPageInner() {
                       )}
                     </span>
                   )}
-                  {result?.error && !isPublished && (
-                    <span className="ml-auto text-xs text-red-600 truncate max-w-[120px]" title={result.error}>
-                      {result.error}
-                    </span>
-                  )}
                 </div>
 
                 {isPublished ? (
-                  <p className="text-xs text-[var(--muted)] italic">
-                    Published. Come back to publish other platforms.
-                  </p>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-3">
+                      <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-green-800">Published successfully</p>
+                        {result.url && (
+                          <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-xs text-green-700 underline">
+                            View post →
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-[var(--muted)]">Other platforms can still be published below.</p>
+                  </div>
                 ) : (
                   <>
                     {/* Account */}
@@ -507,7 +600,229 @@ function ReviewPageInner() {
                         </div>
                       </div>
 
-                      {visualTypes[platform] !== 'none' && (
+                      {visualTypes[platform] === 'image' && (
+                        <div className="flex flex-col gap-3">
+
+                          {/* Source toggle: Blotato vs Nano Banana */}
+                          <div className="flex gap-0.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-0.5">
+                            {(['blotato', 'nanobana'] as VisualSource[]).map((src) => (
+                              <button
+                                key={src}
+                                onClick={() => setVisualSources((prev) => ({ ...prev, [platform]: src }))}
+                                className={`flex-1 text-xs py-1.5 px-2 rounded-md font-medium transition-colors ${
+                                  visualSources[platform] === src
+                                    ? 'bg-white shadow-sm text-[var(--foreground)]'
+                                    : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+                                }`}
+                              >
+                                {src === 'blotato' ? 'Blotato Template' : '✦ Nano Banana'}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* ── Blotato Template section ── */}
+                          {visualSources[platform] === 'blotato' && (
+                            <div className="flex flex-col gap-1.5">
+                              <select
+                                value={selectedTemplates[platform]}
+                                onChange={(e) => setSelectedTemplates((prev) => ({ ...prev, [platform]: e.target.value }))}
+                                className="text-xs border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+                              >
+                                <option value="">
+                                  {templates.length ? 'Select template' : 'No templates — add in Blotato first'}
+                                </option>
+                                {templates.map((t) => (
+                                  <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                              </select>
+                              {selectedTemplates[platform] && (
+                                <button
+                                  type="button"
+                                  onClick={() => generateVisualForPlatform(platform)}
+                                  disabled={isGeneratingThisVisual}
+                                  className="text-xs text-[var(--primary)] hover:underline disabled:opacity-50 text-left flex items-center gap-1.5"
+                                >
+                                  {isGeneratingThisVisual && (
+                                    <span className="inline-block w-3 h-3 border border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+                                  )}
+                                  {isGeneratingThisVisual ? 'Generating…' : visuals[platform] ? 'Regenerate visual' : 'Generate visual'}
+                                </button>
+                              )}
+                              {visualErrors[platform] && (
+                                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                                  {visualErrors[platform]}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ── Nano Banana section ── */}
+                          {visualSources[platform] === 'nanobana' && (
+                            <div className="flex flex-col gap-3">
+
+                              {/* Aspect ratio picker */}
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-xs text-[var(--muted)]">Aspect Ratio</span>
+                                <div className="flex gap-1.5 flex-wrap">
+                                  {PLATFORM_RATIOS[platform].map((opt) => (
+                                    <button
+                                      key={opt.value}
+                                      onClick={() => setCarouselAspectRatios((prev) => ({ ...prev, [platform]: opt.value }))}
+                                      className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg border text-xs transition-all flex-1 min-w-0 ${
+                                        carouselAspectRatios[platform] === opt.value
+                                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--foreground)]'
+                                          : 'border-[var(--border)] text-[var(--muted)] hover:border-[var(--primary)]/40'
+                                      }`}
+                                    >
+                                      <span className="font-bold">{opt.label}</span>
+                                      <span className="text-xs leading-tight opacity-70">{opt.dims}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Style picker */}
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-xs text-[var(--muted)]">Style</span>
+                                <div className="flex flex-col gap-1">
+                                  {CAROUSEL_STYLE_KEYS.map((s) => (
+                                    <button
+                                      key={s}
+                                      onClick={() => setCarouselStyles((prev) => ({ ...prev, [platform]: s }))}
+                                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left text-xs transition-all ${
+                                        carouselStyles[platform] === s
+                                          ? 'border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--foreground)]'
+                                          : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/40'
+                                      }`}
+                                    >
+                                      <StyleDot styleKey={s} />
+                                      <span className="font-medium">{CAROUSEL_STYLES[s].label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Slide count (Instagram only) */}
+                              {platform === 'instagram' && (
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-[var(--muted)]">Slides</span>
+                                    <span className="text-xs font-bold text-[var(--primary)]">{carouselSlideCounts[platform]}</span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min={2}
+                                    max={10}
+                                    value={carouselSlideCounts[platform]}
+                                    onChange={(e) => setCarouselSlideCounts((prev) => ({ ...prev, [platform]: Number(e.target.value) }))}
+                                    className="w-full accent-[var(--primary)]"
+                                  />
+                                  <div className="flex justify-between text-xs text-[var(--muted)]">
+                                    <span>2</span><span>10 slides</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Generate button */}
+                              <button
+                                onClick={() => handleGenerateCarousel(platform)}
+                                disabled={generatingCarousel === platform}
+                                className="w-full py-2 bg-[var(--primary)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                              >
+                                {generatingCarousel === platform ? (
+                                  <>
+                                    <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                                    Generating…
+                                  </>
+                                ) : (
+                                  <>✦ {carouselResults[platform].length > 0 ? 'Regenerate' : 'Generate'} {platform === 'instagram' ? `${carouselSlideCounts[platform]} Slides` : 'Image'}</>
+                                )}
+                              </button>
+
+                              {carouselErrors[platform] && (
+                                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                                  {carouselErrors[platform]}
+                                </p>
+                              )}
+
+                              {/* Generated slides grid */}
+                              {carouselResults[platform].length > 0 && (
+                                <div className="flex flex-col gap-2">
+                                  <span className="text-xs text-[var(--muted)]">
+                                    {carouselResults[platform].length === 1 ? 'Generated image — click to use' : `${carouselResults[platform].length} slides — click any to set as visual`}
+                                  </span>
+                                  <div className={`grid gap-1.5 ${carouselResults[platform].length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                                    {carouselResults[platform].map((slide) => {
+                                      const imgSrc = slide.url || (slide.fallbackBase64 ? `data:${slide.fallbackMime ?? 'image/jpeg'};base64,${slide.fallbackBase64}` : '')
+                                      return (
+                                      <button
+                                        key={slide.number}
+                                        onClick={() => slide.url && setVisuals((prev) => ({ ...prev, [platform]: slide.url }))}
+                                        disabled={!slide.url}
+                                        className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                                          visuals[platform] === slide.url
+                                            ? 'border-[var(--primary)] shadow-md'
+                                            : slide.url ? 'border-transparent hover:border-[var(--primary)]/50' : 'border-amber-300 cursor-default'
+                                        }`}
+                                      >
+                                        <img
+                                          src={imgSrc}
+                                          alt={`Slide ${slide.number}`}
+                                          className={`w-full object-cover ${ratioAspectClass(carouselAspectRatios[platform])}`}
+                                        />
+                                        {!slide.url && slide.fallbackBase64 && (
+                                          <div className="absolute bottom-1 left-1 right-1">
+                                            <a
+                                              href={imgSrc}
+                                              download={`slide_${slide.number}.${slide.fallbackMime === 'image/png' ? 'png' : 'jpg'}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="block text-center text-xs bg-amber-600 text-white rounded py-0.5 px-1"
+                                            >
+                                              ↓ Save (not in storage)
+                                            </a>
+                                          </div>
+                                        )}
+                                        {carouselResults[platform].length > 1 && (
+                                          <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-full leading-none">
+                                            {slide.number}
+                                          </div>
+                                        )}
+                                        {visuals[platform] === slide.url && (
+                                          <div className="absolute top-1 right-1 bg-[var(--primary)] text-white text-xs px-1.5 py-0.5 rounded-full leading-none">
+                                            ✓ In use
+                                          </div>
+                                        )}
+                                      </button>
+                                      )
+                                    })}
+                                  </div>
+                                  <p className="text-xs text-[var(--muted)] italic">
+                                    {visuals[platform]
+                                      ? `Slide selected. Only 1 image will be posted — pick the best one.`
+                                      : 'Click a slide to select it as your post image.'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Active visual preview */}
+                          {visuals[platform] && (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs text-[var(--muted)]">Selected visual</span>
+                              <div className="rounded-lg overflow-hidden border border-[var(--border)] aspect-video bg-black">
+                                {/\.(mp4|webm|mov)(\?|$)/i.test(visuals[platform]) ? (
+                                  <video src={visuals[platform]} controls className="w-full h-full object-contain" />
+                                ) : (
+                                  <img src={visuals[platform]} alt={`${config.label} visual`} className="w-full h-full object-contain" />
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {visualTypes[platform] === 'video' && (
                         <div className="flex flex-col gap-1.5">
                           <select
                             value={selectedTemplates[platform]}
@@ -521,7 +836,6 @@ function ReviewPageInner() {
                               <option key={t.id} value={t.id}>{t.name}</option>
                             ))}
                           </select>
-
                           {selectedTemplates[platform] && (
                             <button
                               type="button"
@@ -532,7 +846,7 @@ function ReviewPageInner() {
                               {isGeneratingThisVisual && (
                                 <span className="inline-block w-3 h-3 border border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
                               )}
-                              {isGeneratingThisVisual ? 'Generating visual…' : visuals[platform] ? 'Regenerate visual' : 'Generate visual'}
+                              {isGeneratingThisVisual ? 'Generating…' : visuals[platform] ? 'Regenerate video' : 'Generate video'}
                             </button>
                           )}
                           {visualErrors[platform] && (
@@ -540,14 +854,9 @@ function ReviewPageInner() {
                               {visualErrors[platform]}
                             </p>
                           )}
-
                           {visuals[platform] && (
                             <div className="rounded-lg overflow-hidden border border-[var(--border)] aspect-video bg-black">
-                              {/\.(mp4|webm|mov)(\?|$)/i.test(visuals[platform]) ? (
-                                <video src={visuals[platform]} controls className="w-full h-full object-contain" />
-                              ) : (
-                                <img src={visuals[platform]} alt={`${config.label} visual`} className="w-full h-full object-contain" />
-                              )}
+                              <video src={visuals[platform]} controls className="w-full h-full object-contain" />
                             </div>
                           )}
                         </div>
@@ -574,10 +883,23 @@ function ReviewPageInner() {
                     <button
                       onClick={() => publishPlatform(platform)}
                       disabled={isPublishing || !selectedAccounts[platform] || !texts[platform] || overLimit}
-                      className="w-full py-2 border border-[var(--border)] rounded-lg text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full py-2 border border-[var(--border)] rounded-lg text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
+                      {isPublishing && (
+                        <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                      )}
                       {isPublishing ? `Publishing ${config.label}…` : `Publish ${config.label} only`}
                     </button>
+
+                    {/* Publish error */}
+                    {result?.error && !isPublished && (
+                      <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                        <svg className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <p className="text-xs text-red-700 leading-relaxed">{result.error}</p>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -602,4 +924,17 @@ export default function ReviewPage() {
       <ReviewPageInner />
     </Suspense>
   )
+}
+
+// ── Style dot swatch ──────────────────────────────────────────────────────────
+
+function StyleDot({ styleKey }: { styleKey: CarouselStyle }) {
+  const dots: Record<CarouselStyle, string> = {
+    white_card:      'bg-white border border-gray-300',
+    dark_statement:  'bg-[#111]',
+    gradient_bold:   'bg-gradient-to-br from-blue-600 to-purple-600',
+    cinematic:       'bg-gradient-to-br from-gray-600 to-gray-900',
+    branded_minimal: 'bg-orange-500',
+  }
+  return <span className={`w-3 h-3 rounded-full flex-shrink-0 ${dots[styleKey]}`} />
 }

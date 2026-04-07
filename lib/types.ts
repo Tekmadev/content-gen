@@ -76,11 +76,53 @@ export interface PostDraft {
   linkedin_url?: string
   instagram_url?: string
   x_url?: string
-  status: 'draft' | 'generating' | 'ready' | 'publishing' | 'published' | 'failed'
+  status: 'draft' | 'generating' | 'ready' | 'publishing' | 'published' | 'failed' | 'publish_failed'
   error_message?: string
+  linkedin_publish_error?: string
+  instagram_publish_error?: string
+  x_publish_error?: string
   created_at: string
   published_at?: string
 }
+
+// ── Brand Settings ─────────────────────────────────────────────────────────
+
+export interface BrandSettings {
+  primary_color:    string   // hex, e.g. '#1a1a2e'
+  secondary_color:  string   // hex
+  accent_color:     string   // hex, e.g. '#F97316'
+  background_color: string   // hex
+  text_color:       string   // hex
+  font_family:      string   // e.g. 'Inter', 'Helvetica Neue', 'Playfair Display'
+  brand_name:       string   // optional brand/company name
+}
+
+// ── Carousel / Image Generator Types ──────────────────────────────────────
+
+export type CarouselPlatform = 'instagram_carousel' | 'linkedin_image' | 'x_image'
+
+export type CarouselStyle = 'white_card' | 'dark_statement' | 'gradient_bold' | 'cinematic' | 'branded_minimal'
+
+export interface CarouselSlide {
+  number: number
+  type: 'hook' | 'body' | 'insight' | 'cta'
+  text: string
+  url: string              // Supabase Storage public URL (empty string if upload failed)
+  fallbackBase64?: string  // raw base64 if storage upload failed — use for local download
+  fallbackMime?: string
+}
+
+export interface CarouselJob {
+  jobId: string
+  platform: CarouselPlatform
+  style: CarouselStyle
+  numSlides: number
+  slides: CarouselSlide[]
+  draftId?: string  // linked post draft (optional)
+  createdAt: string
+}
+
+// ── Post Log ───────────────────────────────────────────────────────────────
 
 export interface PostLogEntry {
   id: string

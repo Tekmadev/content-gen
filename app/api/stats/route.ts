@@ -12,7 +12,7 @@ export async function GET() {
     supabase.from('posts_log').select('*', { count: 'exact', head: true }).eq('user_id', uid),
     supabase.from('posts_log').select('*', { count: 'exact', head: true }).eq('user_id', uid).eq('status', 'published'),
     supabase.from('posts_log').select('*', { count: 'exact', head: true }).eq('user_id', uid).eq('status', 'ready'),
-    supabase.from('posts_log').select('*', { count: 'exact', head: true }).eq('user_id', uid).eq('status', 'failed'),
+    supabase.from('posts_log').select('*', { count: 'exact', head: true }).eq('user_id', uid).in('status', ['failed', 'publish_failed']),
     supabase.from('posts_log').select('*', { count: 'exact', head: true }).eq('user_id', uid).in('status', ['generating', 'publishing']),
   ])
 

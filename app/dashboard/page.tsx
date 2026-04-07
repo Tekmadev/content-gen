@@ -24,6 +24,12 @@ interface Stats {
   platforms: { linkedin: number; instagram: number; x: number }
 }
 
+interface UsageData {
+  credits_used: number
+  total_credits: number
+  plan: string | null
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = useRef(createClient()).current
@@ -36,6 +42,7 @@ export default function DashboardPage() {
   const [error, setError] = useState('')
   const [recentPosts, setRecentPosts] = useState<PostDraft[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
+  const [usage, setUsage] = useState<UsageData | null>(null)
 
   const fetchRecentPosts = useCallback(async () => {
     const res = await fetch('/api/posts?limit=5')
@@ -51,7 +58,19 @@ export default function DashboardPage() {
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
     fetchRecentPosts()
     fetchStats()
-  }, [fetchRecentPosts, fetchStats])
+    fetch('/api/profile')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.profile && data?.totalCredits) {
+          setUsage({
+            credits_used: data.profile.credits_used,
+            total_credits: data.totalCredits,
+            plan: data.profile.subscription_plan,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [fetchRecentPosts, fetchStats, supabase.auth])
 
   // Poll while any post is in a non-terminal state
   useEffect(() => {
@@ -122,7 +141,8 @@ export default function DashboardPage() {
     ready: { label: 'Ready', cls: 'bg-blue-100 text-blue-700' },
     generating: { label: 'Generating…', cls: 'bg-yellow-100 text-yellow-700' },
     publishing: { label: 'Publishing…', cls: 'bg-yellow-100 text-yellow-700' },
-    failed: { label: 'Failed', cls: 'bg-red-100 text-red-700' },
+    failed:         { label: 'Failed',         cls: 'bg-red-100 text-red-700' },
+    publish_failed: { label: 'Publish Failed', cls: 'bg-orange-100 text-orange-700' },
     draft: { label: 'Draft', cls: 'bg-gray-100 text-gray-600' },
   }
 
@@ -144,6 +164,53 @@ export default function DashboardPage() {
                 <span className="text-xs text-[var(--muted)]">{s.label}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Usage summary */}
+        {usage && (
+          <div className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--muted)] uppercase tracking-wide">
+                Monthly Credits
+                {usage.plan && (
+                  <span className="ml-2 capitalize font-normal text-[var(--primary)]">
+                    — {usage.plan} plan
+                  </span>
+                )}
+              </h2>
+              <button
+                onClick={() => router.push('/billing')}
+                className="text-xs text-[var(--primary)] hover:underline"
+              >
+                Manage →
+              </button>
+            </div>
+            {(() => {
+              const pct = Math.min(100, Math.round((usage.credits_used / usage.total_credits) * 100))
+              const remaining = Math.max(0, usage.total_credits - usage.credits_used)
+              const isDanger  = pct >= 100
+              const isWarning = pct >= 80
+              return (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--foreground)]">
+                      {remaining.toLocaleString()} credits remaining
+                    </span>
+                    <span className={isDanger ? 'text-red-600 font-semibold' : isWarning ? 'text-orange-600 font-semibold' : 'text-[var(--muted)]'}>
+                      {usage.credits_used}/{usage.total_credits}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-[var(--surface)] rounded-full overflow-hidden border border-[var(--border)]">
+                    <div
+                      className={`h-full rounded-full ${isDanger ? 'bg-red-500' : isWarning ? 'bg-orange-400' : 'bg-[var(--primary)]'}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-[var(--muted)]">Post gen = 1 cr · Visual = 3 cr · Carousel = 8 cr</p>
+                </div>
+              )
+            })()}
           </div>
         )}
 

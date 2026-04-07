@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { publishPost, pollPost } from '@/lib/blotato'
+import { getUserProfile, getBlotatoKey, recordPostPublished, trackEvent } from '@/lib/user-profile'
 
 export const maxDuration = 60
 import { appendLog } from '@/lib/posts-log'
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
 
   if (!draftId) return NextResponse.json({ error: 'draftId is required' }, { status: 400 })
 
+  const profile = await getUserProfile(user.id)
+  const blotatoKey = getBlotatoKey(profile)
+
   await supabase.from('posts_log').update({ status: 'publishing' }).eq('id', draftId)
 
   const results: Record<string, { submissionId?: string; url?: string; error?: string }> = {}
@@ -39,10 +43,10 @@ export async function POST(request: Request) {
         pageId,
         text,
         mediaUrls: visualUrl ? [visualUrl] : [],
-      }).catch((err: Error) => { results.linkedin = { error: err.message }; return null })
+      }, blotatoKey).catch((err: Error) => { results.linkedin = { error: err.message }; return null })
 
       if (submissionId) {
-        const result = await pollPost(submissionId).catch((err: Error) => {
+        const result = await pollPost(submissionId, 120_000, blotatoKey).catch((err: Error) => {
           results.linkedin = { error: err.message }
           return null
         })
@@ -59,10 +63,10 @@ export async function POST(request: Request) {
         mediaUrls: visualUrl ? [visualUrl] : [],
         mediaType: 'IMAGE',
         altText: text.slice(0, 100),
-      }).catch((err: Error) => { results.instagram = { error: err.message }; return null })
+      }, blotatoKey).catch((err: Error) => { results.instagram = { error: err.message }; return null })
 
       if (submissionId) {
-        const result = await pollPost(submissionId).catch((err: Error) => {
+        const result = await pollPost(submissionId, 120_000, blotatoKey).catch((err: Error) => {
           results.instagram = { error: err.message }
           return null
         })
@@ -77,10 +81,10 @@ export async function POST(request: Request) {
         accountId,
         text,
         mediaUrls: visualUrl ? [visualUrl] : [],
-      }).catch((err: Error) => { results.x = { error: err.message }; return null })
+      }, blotatoKey).catch((err: Error) => { results.x = { error: err.message }; return null })
 
       if (submissionId) {
-        const result = await pollPost(submissionId).catch((err: Error) => {
+        const result = await pollPost(submissionId, 120_000, blotatoKey).catch((err: Error) => {
           results.x = { error: err.message }
           return null
         })
@@ -98,10 +102,19 @@ export async function POST(request: Request) {
 
   // Update Supabase record
   const hasAnySuccess = results.linkedin?.url || results.instagram?.url || results.x?.url
+  const allFailed = !hasAnySuccess && (results.linkedin?.error || results.instagram?.error || results.x?.error)
+
+  // Build a readable error summary for allFailed case
+  const publishErrors = [
+    results.linkedin?.error ? `LinkedIn: ${results.linkedin.error}` : null,
+    results.instagram?.error ? `Instagram: ${results.instagram.error}` : null,
+    results.x?.error ? `X: ${results.x.error}` : null,
+  ].filter(Boolean)
+
   await supabase
     .from('posts_log')
     .update({
-      status: hasAnySuccess ? 'published' : 'failed',
+      status: hasAnySuccess ? 'published' : (allFailed ? 'publish_failed' : 'ready'),
       published_at: hasAnySuccess ? new Date().toISOString() : null,
       linkedin_blotato_id: results.linkedin?.submissionId,
       instagram_blotato_id: results.instagram?.submissionId,
@@ -109,8 +122,23 @@ export async function POST(request: Request) {
       linkedin_url: results.linkedin?.url,
       instagram_url: results.instagram?.url,
       x_url: results.x?.url,
+      linkedin_publish_error: results.linkedin?.error ?? null,
+      instagram_publish_error: results.instagram?.error ?? null,
+      x_publish_error: results.x?.error ?? null,
+      error_message: allFailed ? publishErrors.join(' | ') : null,
     })
     .eq('id', draftId)
+
+  // Update aggregate counters + track event
+  if (hasAnySuccess) {
+    const publishedPlatforms = [
+      results.linkedin?.url ? 'linkedin' : null,
+      results.instagram?.url ? 'instagram' : null,
+      results.x?.url ? 'x' : null,
+    ].filter(Boolean)
+    recordPostPublished(user.id)
+    trackEvent(user.id, 'post_published', { draft_id: draftId, platforms: publishedPlatforms })
+  }
 
   // Append to local posts-log.json
   if (hasAnySuccess && draft) {

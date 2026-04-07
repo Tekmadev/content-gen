@@ -1,6 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Routes that don't require auth
+const PUBLIC_ROUTES = ['/login', '/pricing', '/terms', '/privacy']
+
+// Routes that authenticated users can access even without a subscription
+const AUTH_ONLY_ROUTES = ['/onboarding', '/billing', '/auth']
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -28,24 +34,64 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
-  const isPublicRoute = pathname === '/login' || pathname.startsWith('/auth/')
 
+  const isPublicRoute   = PUBLIC_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'))
+  const isAuthOnlyRoute = AUTH_ONLY_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'))
+  const isApiRoute      = pathname.startsWith('/api/')
+
+  // 1. Not logged in → redirect to /login (except public routes)
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
+  // 2. Logged in + on /login → redirect to /dashboard
   if (user && pathname === '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
+  // 3. For logged-in users on protected routes, check onboarding + subscription
+  //    Skip check for API routes (they do their own auth), auth-only routes, and public routes
+  if (user && !isPublicRoute && !isAuthOnlyRoute && !isApiRoute) {
+    try {
+      // Lightweight DB check using the anon client (RLS will limit to own rows)
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('onboarding_completed, subscription_status')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (profile) {
+        // Onboarding not done → redirect to /onboarding
+        if (!profile.onboarding_completed) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/onboarding'
+          return NextResponse.redirect(url)
+        }
+
+        // No active subscription → redirect to /billing
+        const hasActive =
+          profile.subscription_status === 'active' ||
+          profile.subscription_status === 'trialing'
+
+        if (!hasActive) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/billing'
+          return NextResponse.redirect(url)
+        }
+      }
+    } catch {
+      // If DB check fails, let the request through — API routes handle their own auth
+    }
+  }
+
   return supabaseResponse
 }
 
-export const config = {
+export const proxyConfig = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],

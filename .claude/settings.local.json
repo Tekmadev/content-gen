@@ -10,7 +10,11 @@
       "Read(//private/tmp/nextjs-test/**)",
       "Read(//private/tmp/nextjs-test/app/**)",
       "Bash(node -e ':*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(ls /Users/shajeed/Business/Tekmadev/Blotato/.env*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Read(//Users/shajeed/.cache/plugins/github.com-vercel-vercel-plugin/skills/nextjs/**)"
     ]
   }
 }

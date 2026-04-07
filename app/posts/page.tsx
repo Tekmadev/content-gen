@@ -6,17 +6,18 @@ import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
 import type { PostDraft } from '@/lib/types'
 
-const STATUS_FILTERS = ['all', 'ready', 'published', 'failed', 'generating'] as const
+const STATUS_FILTERS = ['all', 'ready', 'published', 'failed', 'publish_failed', 'generating'] as const
 type Filter = typeof STATUS_FILTERS[number]
 type SortKey = 'newest' | 'oldest' | 'platform'
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
-  published: { label: 'Published', cls: 'bg-green-100 text-green-700' },
-  ready:     { label: 'Ready', cls: 'bg-blue-100 text-blue-700' },
-  generating:{ label: 'Generating…', cls: 'bg-yellow-100 text-yellow-700' },
-  publishing:{ label: 'Publishing…', cls: 'bg-yellow-100 text-yellow-700' },
-  failed:    { label: 'Failed', cls: 'bg-red-100 text-red-700' },
-  draft:     { label: 'Draft', cls: 'bg-gray-100 text-gray-600' },
+  published:     { label: 'Published',      cls: 'bg-green-100 text-green-700' },
+  ready:         { label: 'Ready',          cls: 'bg-blue-100 text-blue-700' },
+  generating:    { label: 'Generating…',    cls: 'bg-yellow-100 text-yellow-700' },
+  publishing:    { label: 'Publishing…',    cls: 'bg-yellow-100 text-yellow-700' },
+  failed:        { label: 'Failed',         cls: 'bg-red-100 text-red-700' },
+  publish_failed:{ label: 'Publish Failed', cls: 'bg-orange-100 text-orange-700' },
+  draft:         { label: 'Draft',          cls: 'bg-gray-100 text-gray-600' },
 }
 
 const PLATFORM_ICONS: Record<string, string> = {
@@ -128,13 +129,13 @@ export default function PostsPage() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors capitalize ${
                     filter === f
                       ? 'bg-[var(--primary)] text-white'
                       : 'bg-white text-[var(--muted)] border border-[var(--border)] hover:text-[var(--foreground)]'
                   }`}
                 >
-                  {f}
+                  {f === 'publish_failed' ? 'Publish Failed' : f}
                 </button>
               ))}
             </div>
@@ -213,19 +214,53 @@ export default function PostsPage() {
                     </p>
                   )}
 
-                  {/* Error + retry */}
+                  {/* Extraction/generation failure */}
                   {post.status === 'failed' && (
                     <div className="flex items-center justify-between gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                       <p className="text-xs text-red-600 truncate">
-                        {post.error_message || 'Generation failed'}
+                        {post.error_message || 'Extraction or generation failed'}
                       </p>
-                      <button
+                      <span
+                        role="button"
+                        tabIndex={0}
                         onClick={(e) => handleRetry(post.id, e)}
-                        disabled={retrying === post.id}
-                        className="text-xs font-medium text-red-700 hover:underline flex-shrink-0 disabled:opacity-50"
+                        onKeyDown={(e) => e.key === 'Enter' && handleRetry(post.id, e as never)}
+                        aria-disabled={retrying === post.id}
+                        className={`text-xs font-medium text-red-700 hover:underline flex-shrink-0 cursor-pointer ${retrying === post.id ? 'opacity-50 pointer-events-none' : ''}`}
                       >
                         {retrying === post.id ? 'Retrying…' : 'Retry →'}
-                      </button>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Publish failure — content is fine, publishing failed */}
+                  {post.status === 'publish_failed' && (
+                    <div className="flex flex-col gap-1.5 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-orange-700">Publishing failed — content is ready</p>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); router.push(`/review?draftId=${post.id}`) }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); router.push(`/review?draftId=${post.id}`) } }}
+                          className="text-xs font-medium text-orange-800 hover:underline shrink-0 cursor-pointer"
+                        >
+                          Retry publish →
+                        </span>
+                      </div>
+                      {(post.linkedin_publish_error || post.instagram_publish_error || post.x_publish_error) && (
+                        <div className="flex flex-col gap-0.5">
+                          {post.linkedin_publish_error && (
+                            <p className="text-xs text-orange-600">LinkedIn: {post.linkedin_publish_error}</p>
+                          )}
+                          {post.instagram_publish_error && (
+                            <p className="text-xs text-orange-600">Instagram: {post.instagram_publish_error}</p>
+                          )}
+                          {post.x_publish_error && (
+                            <p className="text-xs text-orange-600">X: {post.x_publish_error}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 

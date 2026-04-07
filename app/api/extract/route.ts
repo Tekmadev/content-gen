@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { extractContent } from '@/lib/blotato'
+import { getUserProfile, getBlotatoKey, checkAndDeductCredits, trackEvent, CREDIT_COSTS } from '@/lib/user-profile'
 import type { SourceInput } from '@/lib/types'
 
 export const maxDuration = 60
@@ -42,13 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'sourceType is required' }, { status: 400 })
   }
 
-  // Map 'email' to Blotato's 'text' sourceType
-  const blotatoSource: SourceInput = {
-    ...body,
-    sourceType: body.sourceType === 'email' ? ('text' as SourceInput['sourceType']) : body.sourceType,
-  }
-
-  // Create draft record
+  // Create draft record first so we have a draftId to associate with the credit transaction
   const { data: draft, error: dbError } = await supabase
     .from('posts_log')
     .insert({
@@ -57,6 +52,7 @@ export async function POST(request: Request) {
       source_url: body.url,
       source_content: body.text,
       status: 'generating',
+      generation_started_at: new Date().toISOString(),
     })
     .select()
     .single()
@@ -68,19 +64,33 @@ export async function POST(request: Request) {
     )
   }
 
+  // Check credits + deduct (links transaction to this draft)
+  const usageError = await checkAndDeductCredits(user.id, CREDIT_COSTS.post_gen, 'post_gen', draft.id)
+  if (usageError) {
+    // Roll back draft status so it doesn't clutter the UI
+    await supabase.from('posts_log').update({ status: 'failed', error_message: usageError }).eq('id', draft.id)
+    return NextResponse.json({ error: usageError }, { status: 402 })
+  }
+
+  const profile = await getUserProfile(user.id)
+  const blotatoKey = getBlotatoKey(profile)
+
+  // Map 'email' to Blotato's 'text' sourceType
+  const blotatoSource: SourceInput = {
+    ...body,
+    sourceType: body.sourceType === 'email' ? ('text' as SourceInput['sourceType']) : body.sourceType,
+  }
+
   // If PDF, download and store it in Supabase Storage
   if (body.sourceType === 'pdf' && body.url) {
     const storedPdfUrl = await uploadPdf(supabase, body.url, user.id, draft.id)
     if (storedPdfUrl) {
-      await supabase
-        .from('posts_log')
-        .update({ source_file_url: storedPdfUrl })
-        .eq('id', draft.id)
+      await supabase.from('posts_log').update({ source_file_url: storedPdfUrl }).eq('id', draft.id)
     }
   }
 
   let extractionError = ''
-  const extracted = await extractContent(blotatoSource).catch(async (err: Error) => {
+  const extracted = await extractContent(blotatoSource, blotatoKey).catch(async (err: Error) => {
     extractionError = err.message
     await supabase
       .from('posts_log')
@@ -98,6 +108,9 @@ export async function POST(request: Request) {
     .from('posts_log')
     .update({ extracted_content: contentText })
     .eq('id', draft.id)
+
+  // Fire-and-forget analytics event
+  trackEvent(user.id, 'post_generated', { source_type: body.sourceType, draft_id: draft.id })
 
   return NextResponse.json({ draftId: draft.id, content: contentText })
 }
