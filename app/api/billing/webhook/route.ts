@@ -80,14 +80,14 @@ export async function POST(request: Request) {
           }).eq('user_id', userId),
 
           // Log to subscription_events (deduplication via stripe_event_id)
-          admin.from('subscription_events').insert({
+          admin.from('subscription_events').upsert({
             user_id: userId,
             event_type: subEventType,
             from_plan: oldPlan,
             to_plan: newPlan,
             stripe_event_id: event.id,
             amount_cad_cents: newPlan ? (PLANS[newPlan]?.price ?? null) : null,
-          }).onConflict('stripe_event_id').ignore(),
+          }, { onConflict: 'stripe_event_id', ignoreDuplicates: true }),
         ])
 
         console.log(`[billing/webhook] ${event.type} → user ${userId}, ${oldPlan} → ${newPlan}, status ${sub.status}`)
@@ -115,13 +115,13 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           }).eq('user_id', userId),
 
-          admin.from('subscription_events').insert({
+          admin.from('subscription_events').upsert({
             user_id: userId,
             event_type: 'canceled',
             from_plan: existing?.subscription_plan ?? null,
             to_plan: null,
             stripe_event_id: event.id,
-          }).onConflict('stripe_event_id').ignore(),
+          }, { onConflict: 'stripe_event_id', ignoreDuplicates: true }),
         ])
 
         console.log(`[billing/webhook] Subscription canceled → user ${userId}`)
@@ -145,13 +145,13 @@ export async function POST(request: Request) {
               updated_at: new Date().toISOString(),
             }).eq('user_id', profile.user_id),
 
-            admin.from('subscription_events').insert({
+            admin.from('subscription_events').upsert({
               user_id: profile.user_id,
               event_type: 'payment_failed',
               from_plan: profile.subscription_plan,
               to_plan: profile.subscription_plan,
               stripe_event_id: event.id,
-            }).onConflict('stripe_event_id').ignore(),
+            }, { onConflict: 'stripe_event_id', ignoreDuplicates: true }),
           ])
           console.log(`[billing/webhook] Payment failed → user ${profile.user_id}`)
         }
@@ -176,14 +176,14 @@ export async function POST(request: Request) {
                 updated_at: new Date().toISOString(),
               }).eq('user_id', profile.user_id),
 
-              admin.from('subscription_events').insert({
+              admin.from('subscription_events').upsert({
                 user_id: profile.user_id,
                 event_type: 'payment_recovered',
                 from_plan: profile.subscription_plan,
                 to_plan: profile.subscription_plan,
                 stripe_event_id: event.id,
                 amount_cad_cents: invoice.amount_paid,
-              }).onConflict('stripe_event_id').ignore(),
+              }, { onConflict: 'stripe_event_id', ignoreDuplicates: true }),
             ])
             console.log(`[billing/webhook] Payment recovered → user ${profile.user_id}`)
           }

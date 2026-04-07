@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 
@@ -91,7 +91,7 @@ function CreditBar({ used, total }: { used: number; total: number }) {
   )
 }
 
-export default function BillingPage() {
+function BillingContent() {
   const searchParams = useSearchParams()
   const success    = searchParams.get('success') === '1'
   const canceled   = searchParams.get('canceled') === '1'
@@ -348,5 +348,13 @@ export default function BillingPage() {
         )}
       </div>
     </AppShell>
+  )
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<AppShell user={null}><div className="flex items-center justify-center py-16"><div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" /></div></AppShell>}>
+      <BillingContent />
+    </Suspense>
   )
 }
