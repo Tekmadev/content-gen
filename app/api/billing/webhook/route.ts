@@ -72,7 +72,9 @@ export async function POST(request: Request) {
             subscription_plan: newPlan,
             subscription_status: sub.status,
             stripe_subscription_id: sub.id,
-            subscription_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+            subscription_period_end: sub.items.data[0]?.current_period_end
+              ? new Date(sub.items.data[0].current_period_end * 1000).toISOString()
+              : null,
             ...(isNewSub ? { subscription_started_at: now } : {}),
             updated_at: now,
           }).eq('user_id', userId),
