@@ -95,16 +95,18 @@ export interface BrandSettings {
   text_color:       string   // hex
   font_family:      string   // e.g. 'Inter', 'Helvetica Neue', 'Playfair Display'
   brand_name:       string   // optional brand/company name
+  logo_url?:        string   // public URL of uploaded brand logo (composited onto slides)
   // Carousel AI settings
-  carousel_image_model:   string  // 'gemini' | future: 'anthropic', 'openai', etc.
+  carousel_image_model:   string  // 'gemini' | 'canva'
   carousel_custom_prompt: string  // '' = use built-in style prompts
+  canva_template_id?:     string  // Canva brand template ID for auto-fill
 }
 
 // ── Carousel / Image Generator Types ──────────────────────────────────────
 
 export type CarouselPlatform = 'instagram_carousel' | 'linkedin_image' | 'x_image'
 
-export type CarouselStyle = 'white_card' | 'dark_statement' | 'gradient_bold' | 'cinematic' | 'branded_minimal'
+export type CarouselStyle = 'white_card' | 'dark_statement' | 'gradient_bold' | 'cinematic' | 'branded_minimal' | 'brand_colors'
 
 export interface CarouselSlide {
   number: number
@@ -123,6 +125,33 @@ export interface CarouselJob {
   slides: CarouselSlide[]
   draftId?: string  // linked post draft (optional)
   createdAt: string
+}
+
+// ── Viral Carousel (10-slide studio format) ────────────────────────────────
+
+export type ViralSlideType =
+  | 'hook'
+  | 'rehook'
+  | 'pain'
+  | 'value'
+  | 'turning_point'
+  | 'takeaway'
+  | 'cta'
+
+export interface ViralSlide {
+  number: number
+  type: ViralSlideType
+  label: string   // e.g. "HOOK", "REHOOK", "VALUE 1" — internal only, not shown on slide
+  text: string    // short punchy headline (≤10 words)
+  body?: string   // supporting 1-2 sentence body text shown below the headline
+}
+
+// Canva OAuth token (stored per user in canva_tokens table)
+export interface CanvaToken {
+  user_id: string
+  access_token: string
+  refresh_token?: string
+  expires_at?: string
 }
 
 // ── Post Log ───────────────────────────────────────────────────────────────

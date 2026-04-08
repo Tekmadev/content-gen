@@ -935,6 +935,7 @@ function StyleDot({ styleKey }: { styleKey: CarouselStyle }) {
     gradient_bold:   'bg-gradient-to-br from-blue-600 to-purple-600',
     cinematic:       'bg-gradient-to-br from-gray-600 to-gray-900',
     branded_minimal: 'bg-orange-500',
+    brand_colors:    'bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)]',
   }
   return <span className={`w-3 h-3 rounded-full flex-shrink-0 ${dots[styleKey]}`} />
 }

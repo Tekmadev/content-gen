@@ -4,9 +4,10 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { generateImage, type AspectRatio } from './gemini'
 import { CAROUSEL_STYLES } from './carousel-styles'
-import type { CarouselPlatform, CarouselStyle, BrandSettings } from './types'
+import { generateViralCarouselSlides } from './anthropic'
+import type { CarouselPlatform, CarouselStyle, BrandSettings, ViralSlide } from './types'
 
-export type { CarouselPlatform, CarouselStyle }
+export type { CarouselPlatform, CarouselStyle, ViralSlide }
 export { CAROUSEL_STYLES }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -124,11 +125,11 @@ BRAND IDENTITY — follow these EXACTLY and do not deviate:
 - Background color: ${brand.background_color}
 - Text color: ${brand.text_color}
 - Typography: ${fontNote}
-${brand.brand_name ? `- Brand: ${brand.brand_name}` : ''}
 
 CRITICAL: Use ONLY these exact brand colors. Do not introduce any other colors.
 All text must use the specified text color. Background must use the specified background color.
-The accent color can be used for highlight elements, underlines, or decorative details.`
+The accent color can be used for highlight elements, underlines, or decorative details.
+DO NOT render any logos, icons, monograms, or brand marks anywhere in the design — leave all corners clean.`
 }
 
 // Human-readable font descriptions so Gemini understands the visual intent
@@ -183,7 +184,9 @@ function buildImagePrompt(
   }
 
   // ── Built-in style prompt ──────────────────────────────────────────────
-  const { imagePromptDesc } = CAROUSEL_STYLES[style]
+  const imagePromptDesc = style === 'brand_colors' && brandSettings
+    ? `Background: ${brandSettings.background_color}. Text: ${brandSettings.text_color}. Accent elements in ${brandSettings.accent_color}. Primary highlights in ${brandSettings.primary_color}. Clean minimal layout.`
+    : CAROUSEL_STYLES[style].imagePromptDesc
   const label = formatLabel(platform, ratio)
 
   const slideIndicator =
@@ -203,7 +206,8 @@ TEXT TO DISPLAY (must be the hero element — large, bold, centered, clearly rea
 DESIGN REQUIREMENTS:
 - Text must dominate the composition — large and bold
 - Center the text both horizontally and vertically
-- Keep it minimal — no clutter, no stock photo people, no logos${slideIndicator}
+- Keep it minimal — no clutter, no stock photo people
+- DO NOT render any logos, icons, monograms, symbols, or brand marks anywhere — keep all corners empty${slideIndicator}
 - High production quality suitable for professional social media marketing
 - Do NOT include any watermarks or brand names in the visible design
 
@@ -268,6 +272,144 @@ Rules:
  * 2. Nano Banana (Gemini) renders each slide as an image
  * Returns base64 image data for each slide (caller handles storage upload).
  */
+// ── Viral Carousel Config ─────────────────────────────────────────────────
+
+export interface ViralCarouselConfig {
+  content: string
+  additionalInfo?: string
+  aimImageBase64?: string   // reference image uploaded by user
+  aimImageMime?: string     // mime type of the AIM image
+  aspectRatio?: AspectRatio
+  style?: CarouselStyle
+  brandSettings?: BrandSettings
+}
+
+export interface GeneratedViralSlide extends ViralSlide {
+  base64: string
+  mimeType: string
+}
+
+// ── AIM Image Analysis (Claude Vision) ───────────────────────────────────
+
+/**
+ * Analyze a reference image with Claude Vision and return a visual style description.
+ * This description is injected into Gemini prompts so generated slides match the AIM style.
+ */
+export async function analyzeAimImage(
+  base64: string,
+  mimeType: string
+): Promise<string> {
+  const client = getAnthropicClient()
+  const message = await client.messages.create({
+    model: 'claude-opus-4-6',
+    max_tokens: 250,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+            data: base64,
+          },
+        },
+        {
+          type: 'text',
+          text: 'Analyze this carousel slide image and describe its visual style concisely. Focus on: background colors/textures, typography weight and style, color palette (include hex if visible), layout/composition, mood. This description will guide AI image generation to replicate this look. Be specific, max 120 words, no preamble.',
+        },
+      ],
+    }],
+  })
+  return (message.content[0] as { text: string }).text.trim()
+}
+
+// ── Viral Carousel Image Prompt Builder ──────────────────────────────────
+
+function buildViralImagePrompt(
+  slide: ViralSlide,
+  totalSlides: number,
+  platform: CarouselPlatform,
+  ratio: AspectRatio,
+  aimStyleDescription?: string,
+  brandSettings?: BrandSettings,
+  style?: CarouselStyle
+): string {
+  const label = formatLabel(platform, ratio)
+  const brandSection = brandSettings ? buildBrandSection(brandSettings) : ''
+  const styleDesc = style
+    ? (style === 'brand_colors' && brandSettings
+        ? `Background: ${brandSettings.background_color}. Text: ${brandSettings.text_color}. Accent elements in ${brandSettings.accent_color}. Primary highlights in ${brandSettings.primary_color}. Clean minimal layout.`
+        : CAROUSEL_STYLES[style].imagePromptDesc)
+    : ''
+  const aimSection = aimStyleDescription
+    ? `\nVISUAL STYLE REFERENCE (match this aesthetic closely):\n${aimStyleDescription}`
+    : ''
+  const bodyText = slide.body?.trim()
+
+  return `Create a professional Instagram carousel slide for a ${label}.
+
+${styleDesc ? `BASE STYLE:\n${styleDesc}` : ''}
+${brandSection}${aimSection}
+
+TYPOGRAPHIC LAYOUT — follow this hierarchy EXACTLY:
+1. HEADLINE (dominant element): Large, bold, heavy-weight typography. Left-aligned or centered. 2–4 lines max.
+   Text: "${slide.text}"
+${bodyText ? `2. BODY TEXT (below headline): Smaller font (about 35–45% of headline size), lighter weight, same alignment. 1–2 lines.
+   Text: "${bodyText}"` : ''}
+3. SLIDE COUNTER: Small, subtle "${slide.number}/${totalSlides}" at the bottom-right corner.
+
+LAYOUT RULES:
+- Generous padding on all sides (minimum 8–10% of slide width)
+- Clear visual separation between headline and body (spacing, not dividers)
+- DO NOT show any slide type labels (no "HOOK", "REHOOK", "VALUE", etc.)
+- DO NOT render any logos, icons, monograms, symbols, or brand marks anywhere — keep all corners empty
+- Negative space is intentional — do not fill every inch
+- No watermarks, no decorative borders on the outer edge
+- High production quality for professional social media
+
+Generate the image now.`
+}
+
+// ── Main Export: generateViralCarousel ───────────────────────────────────
+
+/**
+ * Full viral carousel pipeline:
+ * 1. Optionally analyze AIM reference image with Claude Vision
+ * 2. Claude generates 10 viral slide texts (hook → rehook → pain → value × 4 → AHA → takeaway → CTA)
+ * 3. Gemini renders each slide as an image in parallel
+ */
+export async function generateViralCarousel(config: ViralCarouselConfig): Promise<GeneratedViralSlide[]> {
+  const platform: CarouselPlatform = 'instagram_carousel'
+  const ratio: AspectRatio = config.aspectRatio ?? '3:4'
+  const style = config.style ?? 'dark_statement'
+
+  // Step 1: Analyze AIM reference image if provided
+  let aimStyleDescription: string | undefined
+  if (config.aimImageBase64 && config.aimImageMime) {
+    aimStyleDescription = await analyzeAimImage(config.aimImageBase64, config.aimImageMime)
+  }
+
+  // Step 2: Generate 10 viral slide texts via Claude
+  const slides = await generateViralCarouselSlides(
+    config.content,
+    config.additionalInfo,
+    aimStyleDescription,
+    config.brandSettings
+  )
+
+  // Step 3: Render each slide as an image via Gemini in parallel
+  const generated = await Promise.all(
+    slides.map(async (slide) => {
+      const prompt = buildViralImagePrompt(slide, slides.length, platform, ratio, aimStyleDescription, config.brandSettings, style)
+      const imageData = await generateImage(prompt, ratio)
+      return { ...slide, base64: imageData.data, mimeType: imageData.mimeType }
+    })
+  )
+
+  return generated
+}
+
 export async function generateCarousel(config: CarouselConfig): Promise<GeneratedSlide[]> {
   const clampedSlides = Math.min(Math.max(1, config.numSlides), 10)
   const effectiveConfig = { ...config, numSlides: clampedSlides }

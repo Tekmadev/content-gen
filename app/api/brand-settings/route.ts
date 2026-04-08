@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     text_color:             body.text_color             ?? '#111111',
     font_family:            body.font_family            ?? 'Inter',
     brand_name:             body.brand_name             ?? '',
+    logo_url:               body.logo_url               ?? '',
     carousel_image_model:   body.carousel_image_model   ?? 'gemini',
     carousel_custom_prompt: body.carousel_custom_prompt ?? '',
     updated_at: new Date().toISOString(),
@@ -62,6 +63,7 @@ function defaultBrandSettings(): BrandSettings {
     text_color:             '#111111',
     font_family:            'Inter',
     brand_name:             '',
+    logo_url:               '',
     carousel_image_model:   'gemini',
     carousel_custom_prompt: '',
   }

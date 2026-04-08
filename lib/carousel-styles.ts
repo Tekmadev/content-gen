@@ -37,4 +37,10 @@ export const CAROUSEL_STYLES: Record<
     imagePromptDesc:
       'White background with warm orange (#F97316) accent elements — thin border, accent line, or subtle color block. Bold dark typography. Professional and branded. Clean layout.',
   },
+  brand_colors: {
+    label: 'Brand Colors',
+    description: 'Uses your saved brand palette and typography. Consistent on-brand look.',
+    imagePromptDesc:
+      'Professional slide design using exact brand identity colors. Clean minimal layout with strong typographic hierarchy.',
+  },
 }

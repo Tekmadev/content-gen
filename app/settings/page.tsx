@@ -191,6 +191,7 @@ const DEFAULT_BRAND: BrandSettings = {
   text_color:             '#111111',
   font_family:            'Inter',
   brand_name:             '',
+  logo_url:               '',
   carousel_image_model:   'gemini',
   carousel_custom_prompt: '',
 }
@@ -237,6 +238,11 @@ export default function SettingsPage() {
   const [savingBrand, setSavingBrand] = useState(false)
   const [brandSaved, setBrandSaved] = useState(false)
   const [brandError, setBrandError] = useState('')
+
+  // Logo upload
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError] = useState('')
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   // Carousel AI settings (shares the same brand object + API)
   const [savingCarousel, setSavingCarousel] = useState(false)
@@ -307,6 +313,31 @@ export default function SettingsPage() {
       setBrandError(err instanceof Error ? err.message : 'Save failed')
     }
     setSavingBrand(false)
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoUploading(true)
+    setLogoError('')
+    try {
+      const form = new FormData()
+      form.append('logo', file)
+      const res = await fetch('/api/brand-settings/logo', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
+      setBrand((b) => ({ ...b, logo_url: data.logo_url }))
+    } catch (err) {
+      setLogoError(err instanceof Error ? err.message : 'Upload failed')
+    }
+    setLogoUploading(false)
+    if (logoInputRef.current) logoInputRef.current.value = ''
+  }
+
+  async function handleLogoRemove() {
+    setLogoError('')
+    await fetch('/api/brand-settings/logo', { method: 'DELETE' })
+    setBrand((b) => ({ ...b, logo_url: '' }))
   }
 
   async function saveCarouselSettings() {
@@ -542,6 +573,60 @@ export default function SettingsPage() {
               onChange={(e) => setBrand((b) => ({ ...b, brand_name: e.target.value }))}
               placeholder="e.g. Tekmadev"
               className="w-full px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            />
+          </div>
+
+          {/* Brand Logo */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-[var(--foreground)]">Brand Logo</label>
+            <p className="text-xs text-[var(--muted)]">Automatically composited onto every generated carousel slide. PNG with transparent background works best.</p>
+            {brand.logo_url ? (
+              <div className="flex items-center gap-3 p-3 border border-[var(--border)] rounded-xl bg-[var(--surface)]">
+                <div className="w-16 h-16 rounded-lg border border-[var(--border)] bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <img src={brand.logo_url} alt="Brand logo" className="max-w-full max-h-full object-contain p-1" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-[var(--foreground)]">Logo uploaded</p>
+                  <p className="text-[11px] text-[var(--muted)] mt-0.5">Will appear on all carousel slides</p>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={logoUploading}
+                    className="px-3 py-1.5 text-xs border border-[var(--border)] rounded-lg hover:bg-white transition-colors disabled:opacity-50"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    onClick={handleLogoRemove}
+                    className="px-3 py-1.5 text-xs text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => logoInputRef.current?.click()}
+                disabled={logoUploading}
+                className="flex items-center gap-3 px-4 py-3 border-2 border-dashed border-[var(--border)] rounded-xl hover:border-[var(--primary)]/50 hover:bg-[var(--surface)] transition-colors text-left disabled:opacity-50"
+              >
+                <div className="w-10 h-10 rounded-lg bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center flex-shrink-0 text-lg">
+                  {logoUploading ? '⏳' : '🖼'}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-[var(--foreground)]">{logoUploading ? 'Uploading…' : 'Upload logo'}</p>
+                  <p className="text-[11px] text-[var(--muted)]">PNG, JPG, WEBP, SVG — max 2 MB</p>
+                </div>
+              </button>
+            )}
+            {logoError && <p className="text-xs text-red-600">{logoError}</p>}
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              className="hidden"
+              onChange={handleLogoUpload}
             />
           </div>
 

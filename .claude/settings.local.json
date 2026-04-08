@@ -15,7 +15,8 @@
       "Bash(npx tsc:*)",
       "Bash(npm install:*)",
       "Read(//Users/shajeed/.cache/plugins/github.com-vercel-vercel-plugin/skills/nextjs/**)",
-      "Bash(pkill -f \"next dev\")"
+      "Bash(pkill -f \"next dev\")",
+      "Bash(grep -v '^$')"
     ]
   }
 }
