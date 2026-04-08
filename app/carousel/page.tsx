@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
@@ -75,6 +75,14 @@ interface CarouselJob {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function CarouselStudioPage() {
+  return (
+    <Suspense>
+      <CarouselStudioContent />
+    </Suspense>
+  )
+}
+
+function CarouselStudioContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = useRef(createClient()).current
