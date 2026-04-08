@@ -7,6 +7,160 @@ import AppShell from '@/components/AppShell'
 import UserAvatar from '@/components/UserAvatar'
 import type { BrandSettings } from '@/lib/types'
 
+// ── Feedback Modal ────────────────────────────────────────────────────────
+
+function FeedbackModal({
+  user,
+  onClose,
+}: {
+  user: { email?: string; user_metadata?: { full_name?: string } } | null
+  onClose: () => void
+}) {
+  const [name, setName] = useState(user?.user_metadata?.full_name ?? '')
+  const [message, setMessage] = useState('')
+  const [rating, setRating] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!message.trim()) { setError('Please enter your feedback.'); return }
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          message,
+          rating,
+          // Device context collected client-side
+          platform:   navigator.platform,
+          screenSize: `${screen.width}x${screen.height}`,
+          language:   navigator.language,
+          timezone:   Intl.DateTimeFormat().resolvedOptions().timeZone,
+          referrer:   document.referrer || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Submission failed')
+      setDone(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Submission failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+
+      {/* Panel */}
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+          <div>
+            <p className="font-semibold text-[var(--foreground)]">Send Feedback</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">We read every message — thank you.</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface)] text-[var(--muted)]">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {done ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="font-semibold text-[var(--foreground)]">Thanks for the feedback!</p>
+            <p className="text-sm text-[var(--muted)]">We&apos;ll use it to make Content Manager better.</p>
+            <button onClick={onClose} className="mt-2 px-5 py-2 bg-[var(--primary)] text-white rounded-lg text-sm font-medium">
+              Close
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="flex flex-col gap-4 p-5">
+            {error && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+            )}
+
+            {/* Name */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-[var(--foreground)]">Your name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Jane Smith"
+                className="w-full px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              />
+            </div>
+
+            {/* Star rating */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-[var(--foreground)]">How would you rate your experience?</label>
+              <div className="flex gap-1 mt-0.5">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setRating(rating === star ? null : star)}
+                    className={`text-2xl transition-transform hover:scale-110 ${
+                      rating !== null && star <= rating ? 'text-amber-400' : 'text-gray-200'
+                    }`}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Message */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-[var(--foreground)]">
+                Feedback <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="Tell us what's working, what's broken, or what you'd love to see next…"
+                rows={5}
+                required
+                className="w-full px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none"
+              />
+              <p className="text-xs text-[var(--muted)]">{message.length} / 2000 characters</p>
+            </div>
+
+            {/* Privacy note */}
+            <p className="text-xs text-[var(--muted)] leading-relaxed">
+              By submitting, you agree we may collect your name, email, device info, and IP address to process your feedback as described in our{' '}
+              <a href="/privacy" target="_blank" className="text-[var(--primary)] underline">Privacy Policy</a>.
+            </p>
+
+            <button
+              type="submit"
+              disabled={loading || !message.trim()}
+              className="w-full py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-semibold hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+              {loading ? 'Sending…' : 'Send Feedback'}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface Account {
   id: string
   platform: 'twitter' | 'linkedin' | 'instagram' | 'facebook' | 'tiktok'
@@ -64,6 +218,7 @@ export default function SettingsPage() {
     email?: string
     user_metadata?: { avatar_url?: string; full_name?: string; email?: string }
   } | null>(null)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loadingAccounts, setLoadingAccounts] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -130,6 +285,7 @@ export default function SettingsPage() {
 
   return (
     <AppShell user={user}>
+      {feedbackOpen && <FeedbackModal user={user} onClose={() => setFeedbackOpen(false)} />}
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
         <h1 className="text-xl font-semibold">Settings</h1>
 
@@ -385,6 +541,25 @@ export default function SettingsPage() {
           <p className="text-xs text-[var(--muted)]">
             API keys are set as environment variables and never exposed to the browser.
           </p>
+        </section>
+
+        {/* Feedback */}
+        <section className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--muted)]">Feedback</h2>
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Found a bug? Have a feature idea? We&apos;d love to hear from you.
+            </p>
+          </div>
+          <button
+            onClick={() => setFeedbackOpen(true)}
+            className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            Send Feedback
+          </button>
         </section>
       </div>
     </AppShell>

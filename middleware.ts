@@ -60,11 +60,16 @@ export async function middleware(request: NextRequest) {
       // Lightweight DB check using the anon client (RLS will limit to own rows)
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('onboarding_completed, subscription_status')
+        .select('onboarding_completed, subscription_status, is_admin')
         .eq('user_id', user.id)
         .maybeSingle()
 
       if (profile) {
+        // Admins bypass all onboarding + subscription gates
+        if (profile.is_admin) {
+          return supabaseResponse
+        }
+
         // Onboarding not done → redirect to /onboarding
         if (!profile.onboarding_completed) {
           const url = request.nextUrl.clone()

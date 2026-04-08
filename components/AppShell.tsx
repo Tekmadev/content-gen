@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import UserAvatar from './UserAvatar'
 
@@ -55,6 +55,16 @@ const NAV = [
   },
 ]
 
+const ADMIN_NAV_ITEM = {
+  href: '/admin',
+  label: 'Admin',
+  icon: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  ),
+}
+
 interface AppShellProps {
   children: React.ReactNode
   user: { email?: string; user_metadata?: { avatar_url?: string; full_name?: string } } | null
@@ -65,6 +75,14 @@ export default function AppShell({ children, user }: AppShellProps) {
   const router = useRouter()
   const supabase = useRef(createClient()).current
   const [signingOut, setSigningOut] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/check')
+      .then(r => r.json())
+      .then(({ isAdmin }) => { if (isAdmin) setIsAdmin(true) })
+      .catch(() => {})
+  }, [])
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -88,7 +106,7 @@ export default function AppShell({ children, user }: AppShellProps) {
 
         {/* Nav */}
         <nav className="flex flex-col gap-0.5 p-3 flex-1">
-          {NAV.map((item) => {
+          {[...NAV, ...(isAdmin ? [ADMIN_NAV_ITEM] : [])].map((item) => {
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
             return (
               <Link
@@ -96,8 +114,12 @@ export default function AppShell({ children, user }: AppShellProps) {
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   active
-                    ? 'bg-[var(--primary)] text-white'
-                    : 'text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface)]'
+                    ? item.href === '/admin'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-[var(--primary)] text-white'
+                    : item.href === '/admin'
+                      ? 'text-amber-600 hover:bg-amber-50'
+                      : 'text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface)]'
                 }`}
               >
                 {item.icon}
@@ -158,14 +180,16 @@ export default function AppShell({ children, user }: AppShellProps) {
 
         {/* ── Mobile bottom nav ── */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] z-20 flex">
-          {NAV.map((item) => {
+          {[...NAV, ...(isAdmin ? [ADMIN_NAV_ITEM] : [])].map((item) => {
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors ${
-                  active ? 'text-[var(--primary)]' : 'text-[var(--muted)]'
+                  active
+                    ? item.href === '/admin' ? 'text-amber-500' : 'text-[var(--primary)]'
+                    : item.href === '/admin' ? 'text-amber-400' : 'text-[var(--muted)]'
                 }`}
               >
                 {item.icon}

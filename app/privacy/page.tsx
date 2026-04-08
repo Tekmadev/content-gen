@@ -44,6 +44,7 @@ export default function PrivacyPage() {
               <li><strong>Content inputs:</strong> URLs, text, PDFs you submit for post generation</li>
               <li><strong>Generated content:</strong> AI-generated posts, images, and carousels created through the Service</li>
               <li><strong>Billing information:</strong> handled entirely by Stripe — we never store raw card numbers</li>
+              <li><strong>Feedback submissions:</strong> your name, message, optional star rating, and any details you choose to include</li>
             </ul>
 
             <h3 className="font-medium text-xs uppercase tracking-wide text-[var(--muted)] mt-1">2.2 Information collected automatically</h3>
@@ -51,6 +52,7 @@ export default function PrivacyPage() {
               <li><strong>Usage data:</strong> features used, generation counts, session activity</li>
               <li><strong>Log data:</strong> IP address, browser type, pages visited, timestamps</li>
               <li><strong>Cookies and sessions:</strong> authentication tokens managed by Supabase</li>
+              <li><strong>When you submit feedback:</strong> your IP address, browser user-agent string, operating system platform, screen resolution, browser language, timezone, and the page you were on — collected automatically to help us triage and reproduce issues</li>
             </ul>
 
             <h3 className="font-medium text-xs uppercase tracking-wide text-[var(--muted)] mt-1">2.3 Information from third parties</h3>
@@ -182,14 +184,33 @@ export default function PrivacyPage() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-base font-semibold">11. Changes to This Policy</h2>
+            <h2 className="text-base font-semibold">11. Feedback Submissions</h2>
+            <p>
+              When you submit feedback through the Settings page, we collect the following information to process your submission and improve the Service:
+            </p>
+            <ul className="list-disc pl-5 flex flex-col gap-1">
+              <li><strong>Identity:</strong> your name (as entered), email address, and account ID</li>
+              <li><strong>Feedback content:</strong> the message text and optional star rating you provide</li>
+              <li><strong>IP address:</strong> resolved from your network request to help identify geographic context and prevent abuse</li>
+              <li><strong>Device and browser information:</strong> operating system platform, screen resolution, browser language, timezone, and user-agent string — used to reproduce reported issues on the correct environment</li>
+              <li><strong>Referrer:</strong> the page you were on when you submitted feedback</li>
+              <li><strong>Timestamp:</strong> the exact date and time of submission</li>
+            </ul>
+            <p>
+              Feedback data is stored in our Supabase database and is accessible only to Tekmadev staff. We do not share feedback submissions with third parties. You may request deletion of your feedback records by contacting us at <a href="mailto:info@tekmadev.com" className="text-[var(--primary)] underline">info@tekmadev.com</a>. By submitting feedback, you consent to this collection as described above.
+            </p>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h2 className="text-base font-semibold">12. Changes to This Policy</h2>
+
             <p>
               We may update this Privacy Policy periodically. We will notify you of material changes via email at least 14 days before they take effect. Continued use of the Service after the effective date constitutes acceptance of the updated Policy.
             </p>
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-base font-semibold">12. Contact and Privacy Officer</h2>
+            <h2 className="text-base font-semibold">13. Contact and Privacy Officer</h2>
             <p>
               For privacy-related questions, requests, or complaints, contact our Privacy Officer:
             </p>

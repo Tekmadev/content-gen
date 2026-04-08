@@ -19,6 +19,7 @@ export interface UserProfile {
   total_credits_ever_used: number
   last_active_at: string | null
   agreed_to_terms_at: string | null
+  is_admin: boolean
 }
 
 // Monthly credits per plan

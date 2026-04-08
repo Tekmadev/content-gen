@@ -61,6 +61,9 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   last_active_at         TIMESTAMPTZ,
   last_published_at      TIMESTAMPTZ,
 
+  -- Admin flag — bypasses subscription/onboarding enforcement in middleware
+  is_admin               BOOLEAN      NOT NULL DEFAULT false,
+
   created_at             TIMESTAMPTZ  DEFAULT NOW(),
   updated_at             TIMESTAMPTZ  DEFAULT NOW()
 );
@@ -83,8 +86,11 @@ CREATE POLICY "Users can insert own profile"
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  INSERT INTO public.user_profiles (user_id)
-  VALUES (NEW.id)
+  INSERT INTO public.user_profiles (user_id, is_admin)
+  VALUES (
+    NEW.id,
+    NEW.email = 'shajeed0@gmail.com'
+  )
   ON CONFLICT (user_id) DO NOTHING;
   RETURN NEW;
 END;
@@ -392,10 +398,16 @@ SELECT
   up.credits_used,
   up.total_posts_generated,
   up.total_posts_published,
+  up.total_visuals_generated,
+  up.total_carousels_generated,
   up.total_credits_ever_used,
   up.last_active_at,
   up.created_at,
-  up.onboarding_completed
+  up.onboarding_completed,
+  up.is_admin,
+  up.stripe_customer_id,
+  up.subscription_period_end,
+  up.subscription_started_at
 FROM user_profiles up
 JOIN auth.users au ON au.id = up.user_id
 ORDER BY up.created_at DESC;
@@ -476,3 +488,57 @@ ALTER TABLE posts_log DROP CONSTRAINT IF EXISTS posts_log_status_check;
 ALTER TABLE posts_log ADD CONSTRAINT posts_log_status_check
   CHECK (status IN ('draft', 'generating', 'ready', 'publishing', 'published', 'failed', 'publish_failed'));
 */
+
+-- ── 10. FEEDBACK ─────────────────────────────────────────────────────────
+-- User-submitted feedback from the Settings page.
+-- Captures identity, device context, and network info for support triage.
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
+  email            TEXT,
+  name             TEXT,
+  message          TEXT        NOT NULL,
+
+  -- Device & browser context (from User-Agent + JS navigator APIs)
+  user_agent       TEXT,
+  platform         TEXT,       -- e.g. "MacIntel", "Win32"
+  screen_size      TEXT,       -- e.g. "1920x1080"
+  language         TEXT,       -- browser language, e.g. "en-CA"
+  timezone         TEXT,       -- e.g. "America/Toronto"
+  referrer         TEXT,       -- where they came from (document.referrer)
+
+  -- Network (IP resolved server-side from request headers)
+  ip_address       TEXT,
+
+  -- Rating (optional 1-5 star score)
+  rating           INT         CHECK (rating BETWEEN 1 AND 5),
+
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+
+-- Users can insert their own feedback
+DROP POLICY IF EXISTS "Users can submit feedback" ON feedback;
+CREATE POLICY "Users can submit feedback"
+  ON feedback FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+-- Admins read via service-role — no SELECT policy needed for users
+
+CREATE INDEX IF NOT EXISTS feedback_created_at ON feedback (created_at DESC);
+CREATE INDEX IF NOT EXISTS feedback_user_id    ON feedback (user_id);
+
+
+-- ── ADMIN MIGRATION — Run this in Supabase SQL Editor ─────────────────────
+-- Step 1: Add is_admin column
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
+
+-- Step 2: Grant admin to shajeed0@gmail.com
+UPDATE user_profiles
+SET is_admin = true
+WHERE user_id = (SELECT id FROM auth.users WHERE email = 'shajeed0@gmail.com');
+
+-- Step 3: Refresh admin views (re-run the CREATE OR REPLACE VIEW blocks above)
+-- or just re-run the full schema.sql — it's idempotent.
