@@ -32,13 +32,15 @@ export async function POST(request: Request) {
 
   const settings: BrandSettings & { user_id: string; updated_at: string } = {
     user_id: user.id,
-    primary_color:    body.primary_color    ?? '#000000',
-    secondary_color:  body.secondary_color  ?? '#ffffff',
-    accent_color:     body.accent_color     ?? '#F97316',
-    background_color: body.background_color ?? '#ffffff',
-    text_color:       body.text_color       ?? '#111111',
-    font_family:      body.font_family      ?? 'Inter',
-    brand_name:       body.brand_name       ?? '',
+    primary_color:          body.primary_color          ?? '#000000',
+    secondary_color:        body.secondary_color        ?? '#ffffff',
+    accent_color:           body.accent_color           ?? '#F97316',
+    background_color:       body.background_color       ?? '#ffffff',
+    text_color:             body.text_color             ?? '#111111',
+    font_family:            body.font_family            ?? 'Inter',
+    brand_name:             body.brand_name             ?? '',
+    carousel_image_model:   body.carousel_image_model   ?? 'gemini',
+    carousel_custom_prompt: body.carousel_custom_prompt ?? '',
     updated_at: new Date().toISOString(),
   }
 
@@ -53,12 +55,14 @@ export async function POST(request: Request) {
 
 function defaultBrandSettings(): BrandSettings {
   return {
-    primary_color:    '#000000',
-    secondary_color:  '#ffffff',
-    accent_color:     '#F97316',
-    background_color: '#ffffff',
-    text_color:       '#111111',
-    font_family:      'Inter',
-    brand_name:       '',
+    primary_color:          '#000000',
+    secondary_color:        '#ffffff',
+    accent_color:           '#F97316',
+    background_color:       '#ffffff',
+    text_color:             '#111111',
+    font_family:            'Inter',
+    brand_name:             '',
+    carousel_image_model:   'gemini',
+    carousel_custom_prompt: '',
   }
 }

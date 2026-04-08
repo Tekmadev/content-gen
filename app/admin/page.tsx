@@ -27,6 +27,23 @@ interface Overview {
   recentEvents: { event_type: string; to_plan: string | null; created_at: string }[]
 }
 
+interface FeedbackEntry {
+  id: string
+  user_id: string | null
+  email: string | null
+  name: string | null
+  message: string
+  rating: number | null
+  user_agent: string | null
+  platform: string | null
+  screen_size: string | null
+  language: string | null
+  timezone: string | null
+  referrer: string | null
+  ip_address: string | null
+  created_at: string
+}
+
 interface AdminUser {
   user_id: string
   email: string
@@ -304,15 +321,19 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'users'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'feedback'>('overview')
+  const [feedback, setFeedback] = useState<FeedbackEntry[]>([])
+  const [feedbackSearch, setFeedbackSearch] = useState('')
+  const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null)
   const [pageUser, setPageUser] = useState<{ email?: string; user_metadata?: { avatar_url?: string; full_name?: string } } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [ovRes, usersRes] = await Promise.all([
+      const [ovRes, usersRes, feedbackRes] = await Promise.all([
         fetch('/api/admin/overview'),
         fetch('/api/admin/users'),
+        fetch('/api/admin/feedback'),
       ])
       if (ovRes.status === 401 || ovRes.status === 403) {
         setError('Access denied. Admin only.')
@@ -321,6 +342,7 @@ export default function AdminPage() {
       }
       setOverview(await ovRes.json())
       setUsers(await usersRes.json())
+      setFeedback(await feedbackRes.json())
     } catch {
       setError('Failed to load admin data.')
     } finally {
@@ -392,17 +414,21 @@ export default function AdminPage() {
             <p className="text-sm text-[var(--muted)]">Full system visibility & controls</p>
           </div>
           <div className="flex gap-2">
-            {(['overview', 'users'] as const).map(tab => (
+            {([
+              { key: 'overview',  label: 'Overview' },
+              { key: 'users',     label: `Users (${users.length})` },
+              { key: 'feedback',  label: `Feedback (${feedback.length})` },
+            ] as const).map(tab => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${
-                  activeTab === tab
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === tab.key
                     ? 'bg-[var(--primary)] text-white'
                     : 'bg-white border border-[var(--border)] text-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
-                {tab === 'overview' ? 'Overview' : `Users (${users.length})`}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -622,6 +648,121 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
+          </>
+        )}
+
+        {activeTab === 'feedback' && (
+          <>
+            {/* Search */}
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search by email, name, or message…"
+                value={feedbackSearch}
+                onChange={e => setFeedbackSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] bg-white"
+              />
+            </div>
+
+            {feedback.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-[var(--border)] flex items-center justify-center py-16">
+                <p className="text-sm text-[var(--muted)]">No feedback submitted yet.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {feedback
+                  .filter(f => {
+                    const q = feedbackSearch.toLowerCase()
+                    return !q || f.email?.toLowerCase().includes(q) || f.name?.toLowerCase().includes(q) || f.message.toLowerCase().includes(q)
+                  })
+                  .map(f => {
+                    const isExpanded = expandedFeedback === f.id
+                    return (
+                      <div key={f.id} className="bg-white rounded-2xl border border-[var(--border)] overflow-hidden">
+                        {/* Summary row */}
+                        <button
+                          onClick={() => setExpandedFeedback(isExpanded ? null : f.id)}
+                          className="w-full flex items-start gap-4 px-5 py-4 text-left hover:bg-[var(--surface)] transition-colors"
+                        >
+                          {/* Star rating */}
+                          <div className="flex-shrink-0 flex flex-col items-center gap-1 w-14">
+                            <div className="flex">
+                              {[1,2,3,4,5].map(s => (
+                                <span key={s} className={`text-sm ${f.rating && s <= f.rating ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                              ))}
+                            </div>
+                            {f.rating && <span className="text-xs text-[var(--muted)]">{f.rating}/5</span>}
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm text-[var(--foreground)]">{f.name || 'Anonymous'}</span>
+                              {f.email && <span className="text-xs text-[var(--muted)]">{f.email}</span>}
+                            </div>
+                            <p className="text-sm text-[var(--foreground)] mt-1 line-clamp-2">{f.message}</p>
+                          </div>
+
+                          {/* Date + chevron */}
+                          <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                            <span className="text-xs text-[var(--muted)] whitespace-nowrap">
+                              {new Date(f.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                            <span className="text-xs text-[var(--muted)]">
+                              {new Date(f.created_at).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <svg className={`w-4 h-4 text-[var(--muted)] transition-transform mt-1 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </button>
+
+                        {/* Expanded detail */}
+                        {isExpanded && (
+                          <div className="border-t border-[var(--border)] px-5 py-4 flex flex-col gap-4 bg-[var(--surface)]">
+                            {/* Full message */}
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)] mb-1">Message</p>
+                              <p className="text-sm text-[var(--foreground)] whitespace-pre-wrap">{f.message}</p>
+                            </div>
+
+                            {/* Device info grid */}
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)] mb-2">Device & Network</p>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {[
+                                  { label: 'IP Address',   value: f.ip_address },
+                                  { label: 'Platform',     value: f.platform },
+                                  { label: 'Screen',       value: f.screen_size },
+                                  { label: 'Language',     value: f.language },
+                                  { label: 'Timezone',     value: f.timezone },
+                                  { label: 'Referrer',     value: f.referrer || 'Direct' },
+                                ].map(({ label, value }) => value ? (
+                                  <div key={label} className="bg-white rounded-lg border border-[var(--border)] px-3 py-2">
+                                    <p className="text-xs text-[var(--muted)]">{label}</p>
+                                    <p className="text-xs font-medium text-[var(--foreground)] truncate mt-0.5">{value}</p>
+                                  </div>
+                                ) : null)}
+                              </div>
+                            </div>
+
+                            {/* User agent */}
+                            {f.user_agent && (
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)] mb-1">User Agent</p>
+                                <p className="text-xs text-[var(--muted)] font-mono break-all">{f.user_agent}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
           </>
         )}
       </div>

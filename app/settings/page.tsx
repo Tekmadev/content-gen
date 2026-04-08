@@ -65,7 +65,7 @@ function FeedbackModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <p className="font-semibold text-[var(--foreground)]">Send Feedback</p>
-            <p className="text-xs text-[var(--muted)] mt-0.5">We read every message — thank you.</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">We read every message, thank you.</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface)] text-[var(--muted)]">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,13 +184,15 @@ const FONT_OPTIONS = [
 ]
 
 const DEFAULT_BRAND: BrandSettings = {
-  primary_color:    '#000000',
-  secondary_color:  '#ffffff',
-  accent_color:     '#F97316',
-  background_color: '#ffffff',
-  text_color:       '#111111',
-  font_family:      'Inter',
-  brand_name:       '',
+  primary_color:          '#000000',
+  secondary_color:        '#ffffff',
+  accent_color:           '#F97316',
+  background_color:       '#ffffff',
+  text_color:             '#111111',
+  font_family:            'Inter',
+  brand_name:             '',
+  carousel_image_model:   'gemini',
+  carousel_custom_prompt: '',
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -217,11 +219,18 @@ export default function SettingsPage() {
     id?: string
     email?: string
     user_metadata?: { avatar_url?: string; full_name?: string; email?: string }
+    app_metadata?: { provider?: string }
   } | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loadingAccounts, setLoadingAccounts] = useState(true)
   const [copied, setCopied] = useState(false)
+
+  // Profile editing (email users only)
+  const [profileName, setProfileName] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [profileSaved, setProfileSaved] = useState(false)
+  const [profileError, setProfileError] = useState('')
 
   // Brand settings
   const [brand, setBrand] = useState<BrandSettings>(DEFAULT_BRAND)
@@ -229,16 +238,28 @@ export default function SettingsPage() {
   const [brandSaved, setBrandSaved] = useState(false)
   const [brandError, setBrandError] = useState('')
 
+  // Carousel AI settings (shares the same brand object + API)
+  const [savingCarousel, setSavingCarousel] = useState(false)
+  const [carouselSaved, setCarouselSaved] = useState(false)
+  const [carouselError, setCarouselError] = useState('')
+
   const loadBrandSettings = useCallback(async () => {
     const res = await fetch('/api/brand-settings')
     if (res.ok) {
       const data = await res.json()
-      setBrand({ ...DEFAULT_BRAND, ...data })
+      setBrand({
+        ...DEFAULT_BRAND,
+        ...data,
+        carousel_custom_prompt: data.carousel_custom_prompt ?? '',
+      })
     }
   }, [])
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user))
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user)
+      setProfileName(data.user?.user_metadata?.full_name ?? '')
+    })
     loadBrandSettings()
 
     fetch('/api/accounts')
@@ -247,6 +268,24 @@ export default function SettingsPage() {
       .catch(() => {})
       .finally(() => setLoadingAccounts(false))
   }, [loadBrandSettings])
+
+  async function saveProfile() {
+    setSavingProfile(true)
+    setProfileError('')
+    setProfileSaved(false)
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        data: { full_name: profileName.trim() },
+      })
+      if (error) throw error
+      setUser((u) => u ? { ...u, user_metadata: { ...u.user_metadata, full_name: data.user?.user_metadata?.full_name } } : u)
+      setProfileSaved(true)
+      setTimeout(() => setProfileSaved(false), 3000)
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Save failed')
+    }
+    setSavingProfile(false)
+  }
 
   async function saveBrandSettings() {
     setSavingBrand(true)
@@ -268,6 +307,28 @@ export default function SettingsPage() {
       setBrandError(err instanceof Error ? err.message : 'Save failed')
     }
     setSavingBrand(false)
+  }
+
+  async function saveCarouselSettings() {
+    setSavingCarousel(true)
+    setCarouselError('')
+    setCarouselSaved(false)
+    try {
+      const res = await fetch('/api/brand-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(brand),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error || 'Save failed')
+      }
+      setCarouselSaved(true)
+      setTimeout(() => setCarouselSaved(false), 3000)
+    } catch (err) {
+      setCarouselError(err instanceof Error ? err.message : 'Save failed')
+    }
+    setSavingCarousel(false)
   }
 
   async function copyUserId() {
@@ -303,6 +364,33 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* Name edit — email users only */}
+          {user?.app_metadata?.provider !== 'google' && (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-[var(--foreground)]">Display Name</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="Your name"
+                  className="flex-1 px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+                <button
+                  onClick={saveProfile}
+                  disabled={savingProfile || !profileName.trim()}
+                  className="px-4 py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
+                >
+                  {savingProfile && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                  {profileSaved ? '✓ Saved' : 'Save'}
+                </button>
+              </div>
+              {profileError && (
+                <p className="text-xs text-red-600">{profileError}</p>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-1">
             <label className="text-xs text-[var(--muted)]">Account ID</label>
             <div className="flex items-center gap-2">
@@ -319,9 +407,15 @@ export default function SettingsPage() {
           </div>
 
           <div className="border-t border-[var(--border)] pt-4">
-            <p className="text-xs text-[var(--muted)] mb-3">
-              Authenticated via Google through Supabase. To change your name or profile picture, update your Google account.
-            </p>
+            {user?.app_metadata?.provider === 'google' ? (
+              <p className="text-xs text-[var(--muted)] mb-3">
+                Signed in with Google. To change your name or profile picture, update your Google account.
+              </p>
+            ) : (
+              <p className="text-xs text-[var(--muted)] mb-3">
+                Signed in with email and password.
+              </p>
+            )}
             <button
               onClick={async () => {
                 await supabase.auth.signOut()
@@ -515,6 +609,100 @@ export default function SettingsPage() {
             className="self-start px-5 py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
           >
             {savingBrand ? 'Saving…' : brandSaved ? '✓ Saved' : 'Save Brand Style'}
+          </button>
+        </section>
+
+        {/* Carousel AI */}
+        <section className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex flex-col gap-5">
+          <div>
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--muted)]">Carousel AI</h2>
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Choose the image generation model and optionally write your own prompt to control exactly how slides look.
+            </p>
+          </div>
+
+          {/* Model picker */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-[var(--foreground)]">Image Generation Model</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                { id: 'gemini',    label: 'Gemini (Nano Banana)', desc: "Direct image generation by Google",                              available: true },
+                { id: 'anthropic', label: 'Anthropic Claude',     desc: 'Claude writes a creative prompt — Gemini renders it',            available: true },
+              ] as { id: string; label: string; desc: string; available: boolean }[]).map(({ id, label, desc, available }) => (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={!available}
+                  onClick={() => setBrand((b) => ({ ...b, carousel_image_model: id }))}
+                  className={[
+                    'text-left p-3 rounded-xl border transition-all',
+                    brand.carousel_image_model === id && available
+                      ? 'border-[var(--primary)] bg-[var(--primary)]/5'
+                      : 'border-[var(--border)] bg-[var(--surface)]',
+                    !available ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-[var(--primary)]/50',
+                  ].join(' ')}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <p className="text-sm font-medium text-[var(--foreground)]">{label}</p>
+                    {!available ? (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-[var(--muted)]/10 text-[var(--muted)] rounded-full">Soon</span>
+                    ) : brand.carousel_image_model === id ? (
+                      <svg className="w-4 h-4 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-[var(--muted)]">{desc}</p>
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-[var(--muted)]">More models coming soon (OpenAI DALL-E, Stable Diffusion…)</p>
+          </div>
+
+          {/* Custom prompt */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <label className="text-xs font-medium text-[var(--foreground)]">
+                Custom Image Prompt <span className="text-[var(--muted)] font-normal">(optional)</span>
+              </label>
+              <span className="text-[10px] text-[var(--muted)]">{(brand.carousel_custom_prompt ?? '').length} chars</span>
+            </div>
+            <textarea
+              value={brand.carousel_custom_prompt ?? ''}
+              onChange={(e) => setBrand((b) => ({ ...b, carousel_custom_prompt: e.target.value }))}
+              rows={9}
+              placeholder={`Leave empty to use built-in style prompts.\n\nOr write your own, e.g.:\n\nCreate a professional Instagram carousel slide.\nDisplay this text as the hero element, large and centered:\n"{{text}}"\n\nStyle: Dark background, white bold typography, minimal layout.\nPlatform: {{platform}} · Format: {{ratio}}`}
+              className="w-full px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-y leading-relaxed"
+            />
+            {/* Variable chips */}
+            <div className="flex flex-wrap gap-1.5">
+              {['{{text}}', '{{platform}}', '{{ratio}}', '{{slide_number}}', '{{total_slides}}', '{{style}}'].map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  title="Click to insert"
+                  onClick={() => setBrand((b) => ({ ...b, carousel_custom_prompt: b.carousel_custom_prompt + v }))}
+                  className="text-[10px] font-mono bg-[var(--surface)] border border-[var(--border)] rounded px-1.5 py-0.5 text-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors cursor-pointer"
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--muted)]">
+              Click a variable to insert it. <code className="bg-[var(--surface)] px-1 rounded text-[10px]">{'{{text}}'}</code> is replaced with each slide&apos;s text — always include it.
+            </p>
+          </div>
+
+          {carouselError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{carouselError}</p>
+          )}
+
+          <button
+            onClick={saveCarouselSettings}
+            disabled={savingCarousel}
+            className="self-start px-5 py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+          >
+            {savingCarousel ? 'Saving…' : carouselSaved ? '✓ Saved' : 'Save Carousel AI'}
           </button>
         </section>
 

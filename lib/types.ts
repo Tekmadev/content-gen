@@ -95,6 +95,9 @@ export interface BrandSettings {
   text_color:       string   // hex
   font_family:      string   // e.g. 'Inter', 'Helvetica Neue', 'Playfair Display'
   brand_name:       string   // optional brand/company name
+  // Carousel AI settings
+  carousel_image_model:   string  // 'gemini' | future: 'anthropic', 'openai', etc.
+  carousel_custom_prompt: string  // '' = use built-in style prompts
 }
 
 // ── Carousel / Image Generator Types ──────────────────────────────────────

@@ -14,13 +14,15 @@ const FONT_OPTIONS = [
 ]
 
 const DEFAULT_BRAND: BrandSettings = {
-  primary_color:    '#6366f1',
-  secondary_color:  '#ffffff',
-  accent_color:     '#F97316',
-  background_color: '#ffffff',
-  text_color:       '#111111',
-  font_family:      'Inter',
-  brand_name:       '',
+  primary_color:          '#6366f1',
+  secondary_color:        '#ffffff',
+  accent_color:           '#F97316',
+  background_color:       '#ffffff',
+  text_color:             '#111111',
+  font_family:            'Inter',
+  brand_name:             '',
+  carousel_image_model:   'gemini',
+  carousel_custom_prompt: '',
 }
 
 export default function OnboardingPage() {

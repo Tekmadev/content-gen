@@ -73,6 +73,10 @@ export async function checkAndDeductCredits(
   const profile = await getUserProfile(userId)
 
   if (!profile) return 'User profile not found.'
+
+  // Admins bypass subscription and credit checks entirely
+  if (profile.is_admin) return null
+
   if (!hasActiveSubscription(profile)) return 'No active subscription. Please choose a plan to continue.'
 
   const plan = profile.subscription_plan

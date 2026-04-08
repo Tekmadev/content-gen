@@ -277,15 +277,17 @@ CREATE INDEX IF NOT EXISTS posts_log_status_created_at
 -- One row per user — brand colors, font, and name for visual generation.
 
 CREATE TABLE IF NOT EXISTS brand_settings (
-  user_id          UUID    PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  primary_color    TEXT    NOT NULL DEFAULT '#000000',
-  secondary_color  TEXT    NOT NULL DEFAULT '#ffffff',
-  accent_color     TEXT    NOT NULL DEFAULT '#F97316',
-  background_color TEXT    NOT NULL DEFAULT '#ffffff',
-  text_color       TEXT    NOT NULL DEFAULT '#111111',
-  font_family      TEXT    NOT NULL DEFAULT 'Inter',
-  brand_name       TEXT    NOT NULL DEFAULT '',
-  updated_at       TIMESTAMPTZ DEFAULT NOW()
+  user_id                 UUID    PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  primary_color           TEXT    NOT NULL DEFAULT '#000000',
+  secondary_color         TEXT    NOT NULL DEFAULT '#ffffff',
+  accent_color            TEXT    NOT NULL DEFAULT '#F97316',
+  background_color        TEXT    NOT NULL DEFAULT '#ffffff',
+  text_color              TEXT    NOT NULL DEFAULT '#111111',
+  font_family             TEXT    NOT NULL DEFAULT 'Inter',
+  brand_name              TEXT    NOT NULL DEFAULT '',
+  carousel_image_model    TEXT    NOT NULL DEFAULT 'gemini',
+  carousel_custom_prompt  TEXT,
+  updated_at              TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE brand_settings ENABLE ROW LEVEL SECURITY;
@@ -529,6 +531,12 @@ CREATE POLICY "Users can submit feedback"
 
 CREATE INDEX IF NOT EXISTS feedback_created_at ON feedback (created_at DESC);
 CREATE INDEX IF NOT EXISTS feedback_user_id    ON feedback (user_id);
+
+
+-- ── CAROUSEL AI MIGRATION — Run this in Supabase SQL Editor ──────────────
+-- Adds carousel AI model selection and custom prompt to brand_settings.
+ALTER TABLE brand_settings ADD COLUMN IF NOT EXISTS carousel_image_model   TEXT NOT NULL DEFAULT 'gemini';
+ALTER TABLE brand_settings ADD COLUMN IF NOT EXISTS carousel_custom_prompt  TEXT DEFAULT NULL;
 
 
 -- ── ADMIN MIGRATION — Run this in Supabase SQL Editor ─────────────────────

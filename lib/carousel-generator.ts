@@ -170,6 +170,19 @@ function buildImagePrompt(
   ratio: AspectRatio,
   brandSettings?: BrandSettings
 ): string {
+  // ── Custom prompt override ─────────────────────────────────────────────
+  const customPrompt = brandSettings?.carousel_custom_prompt?.trim()
+  if (customPrompt) {
+    return customPrompt
+      .replace(/\{\{text\}\}/g, slide.text)
+      .replace(/\{\{platform\}\}/g, formatLabel(platform, ratio))
+      .replace(/\{\{ratio\}\}/g, ratio)
+      .replace(/\{\{slide_number\}\}/g, String(slide.number))
+      .replace(/\{\{total_slides\}\}/g, String(totalSlides))
+      .replace(/\{\{style\}\}/g, style)
+  }
+
+  // ── Built-in style prompt ──────────────────────────────────────────────
   const { imagePromptDesc } = CAROUSEL_STYLES[style]
   const label = formatLabel(platform, ratio)
 
@@ -197,6 +210,56 @@ DESIGN REQUIREMENTS:
 Generate the image now.`
 }
 
+// ── Claude-written image prompt (Anthropic mode) ──────────────────────────
+// Claude generates a detailed, creative image generation prompt for Gemini to render.
+// This often produces better results because Claude understands context and
+// can write more specific, nuanced prompts than the built-in templates.
+
+async function generateImagePromptWithClaude(
+  slide: SlideSpec,
+  style: CarouselStyle,
+  totalSlides: number,
+  platform: CarouselPlatform,
+  ratio: AspectRatio,
+  brandSettings?: BrandSettings
+): Promise<string> {
+  const client = getAnthropicClient()
+  const { label: styleLabel, description: styleDesc } = CAROUSEL_STYLES[style]
+  const platformLabel = formatLabel(platform, ratio)
+  const brandSection = brandSettings ? buildBrandSection(brandSettings) : ''
+
+  const message = await client.messages.create({
+    model: 'claude-opus-4-6',
+    max_tokens: 600,
+    messages: [{
+      role: 'user',
+      content: `You are writing a detailed image generation prompt for an AI image generator (Gemini).
+
+Platform: ${platformLabel}
+Visual style: ${styleLabel} — ${styleDesc}
+${brandSection}
+
+The text that MUST appear in the image (large, bold, centered, clearly readable):
+"${slide.text}"
+${totalSlides > 1 ? `\nAlso add a subtle slide counter "${slide.number}/${totalSlides}" at the bottom-right corner.` : ''}
+
+Write a single detailed image generation prompt that specifies:
+- Exact background (colors, texture, gradient — be specific with hex codes if applicable)
+- Typography placement and weight for the main text
+- Layout, composition, and spacing
+- Lighting, mood, and atmosphere
+- Any decorative elements or accents
+
+Rules:
+- The text must be the dominant element — do not bury it
+- No stock photo people, no watermarks
+- Output ONLY the prompt — no explanation, no markdown, no preamble`,
+    }],
+  })
+
+  return (message.content[0] as { text: string }).text.trim()
+}
+
 // ── Main Export: generateCarousel ─────────────────────────────────────────
 
 /**
@@ -217,11 +280,28 @@ export async function generateCarousel(config: CarouselConfig): Promise<Generate
     config.platform === 'instagram_carousel' ? '3:4' : '16:9'
   const aspectRatio: AspectRatio = config.aspectRatio ?? defaultRatio
 
-  // Step 3: Generate images in parallel via Nano Banana
+  // Step 3: Generate images in parallel via the configured model
+  const imageModel = config.brandSettings?.carousel_image_model ?? 'gemini'
+
   const generatedSlides = await Promise.all(
     slideSpecs.map(async (slide) => {
       const prompt = buildImagePrompt(slide, config.style, clampedSlides, config.platform, aspectRatio, config.brandSettings)
-      const imageData = await generateImage(prompt, aspectRatio)
+
+      let imageData: { data: string; mimeType: string }
+
+      if (imageModel === 'anthropic') {
+        // Claude writes a detailed creative prompt → Gemini renders it
+        const claudePrompt = await generateImagePromptWithClaude(
+          slide, config.style, clampedSlides, config.platform, aspectRatio, config.brandSettings
+        )
+        imageData = await generateImage(claudePrompt, aspectRatio)
+      } else if (imageModel === 'gemini') {
+        imageData = await generateImage(prompt, aspectRatio)
+      } else {
+        // Future models (OpenAI DALL-E, Stable Diffusion, etc.) plug in here
+        throw new Error(`Image model "${imageModel}" is not yet supported.`)
+      }
+
       return {
         ...slide,
         base64: imageData.data,
