@@ -58,8 +58,12 @@ STRUCTURE (adapt for single post, not literal carousel slides)
    Examples: "Fix your system." / "Stop waiting for more leads." / "Audit your process today."
 `
 
-export async function generateLinkedInPost(extractedContent: string): Promise<string> {
+export async function generateLinkedInPost(extractedContent: string, brandBriefContext?: string | null): Promise<string> {
   const client = getClient()
+  const voiceSection = brandBriefContext
+    ? `The following is the brand identity of the business you are writing for. Write in their voice, for their audience, aligned with their content pillars and personality:\n\n${brandBriefContext}\n\nALSO follow these universal content quality rules:\n${BRAND_VOICE}`
+    : BRAND_VOICE
+
   const message = await client.messages.create({
     model: 'claude-opus-4-6',
     max_tokens: 1024,
@@ -68,7 +72,7 @@ export async function generateLinkedInPost(extractedContent: string): Promise<st
         role: 'user',
         content: `You are writing a LinkedIn post for a business brand.
 
-${BRAND_VOICE}
+${voiceSection}
 
 ${POST_STRUCTURE}
 
@@ -90,8 +94,12 @@ Write the LinkedIn post now. Output only the post text, nothing else.`,
   return (message.content[0] as { text: string }).text.trim()
 }
 
-export async function generateInstagramPost(extractedContent: string): Promise<string> {
+export async function generateInstagramPost(extractedContent: string, brandBriefContext?: string | null): Promise<string> {
   const client = getClient()
+  const voiceSection = brandBriefContext
+    ? `The following is the brand identity of the business you are writing for. Write in their voice, for their audience, aligned with their content pillars and personality:\n\n${brandBriefContext}\n\nALSO follow these universal content quality rules:\n${BRAND_VOICE}`
+    : BRAND_VOICE
+
   const message = await client.messages.create({
     model: 'claude-opus-4-6',
     max_tokens: 600,
@@ -100,7 +108,7 @@ export async function generateInstagramPost(extractedContent: string): Promise<s
         role: 'user',
         content: `You are writing an Instagram caption for a business brand.
 
-${BRAND_VOICE}
+${voiceSection}
 
 ${POST_STRUCTURE}
 
@@ -130,8 +138,12 @@ Write the Instagram caption now. No hashtags. Output only the caption text, noth
   return (message.content[0] as { text: string }).text.trim()
 }
 
-export async function generateXPost(extractedContent: string): Promise<string> {
+export async function generateXPost(extractedContent: string, brandBriefContext?: string | null): Promise<string> {
   const client = getClient()
+  const voiceSection = brandBriefContext
+    ? `The following is the brand identity of the business you are writing for. Write in their voice, for their audience, aligned with their content pillars and personality:\n\n${brandBriefContext}\n\nALSO follow these universal content quality rules:\n${BRAND_VOICE}`
+    : BRAND_VOICE
+
   const message = await client.messages.create({
     model: 'claude-opus-4-6',
     max_tokens: 256,
@@ -140,7 +152,7 @@ export async function generateXPost(extractedContent: string): Promise<string> {
         role: 'user',
         content: `You are writing an X (Twitter) post for a business brand.
 
-${BRAND_VOICE}
+${voiceSection}
 
 X RULES
 - Maximum 280 characters — count carefully
@@ -161,11 +173,11 @@ Write the X post now. Output only the post text, nothing else. Must be under 280
   return (message.content[0] as { text: string }).text.trim()
 }
 
-export async function generateAllPosts(extractedContent: string) {
+export async function generateAllPosts(extractedContent: string, brandBriefContext?: string | null) {
   const [linkedin, instagram, x] = await Promise.all([
-    generateLinkedInPost(extractedContent),
-    generateInstagramPost(extractedContent),
-    generateXPost(extractedContent),
+    generateLinkedInPost(extractedContent, brandBriefContext),
+    generateInstagramPost(extractedContent, brandBriefContext),
+    generateXPost(extractedContent, brandBriefContext),
   ])
   return { linkedin, instagram, x }
 }
@@ -212,11 +224,14 @@ export async function generateViralCarouselSlides(
   content: string,
   additionalInfo?: string,
   aimStyleDescription?: string,
-  brandSettings?: BrandSettings
+  brandSettings?: BrandSettings,
+  brandBriefContext?: string | null
 ): Promise<ViralSlide[]> {
   const client = getClient()
 
-  const brandContext = brandSettings?.brand_name
+  const brandContext = brandBriefContext
+    ? `\nBRAND IDENTITY — write every slide in this brand's voice, for their audience:\n${brandBriefContext}`
+    : brandSettings?.brand_name
     ? `\nBRAND: ${brandSettings.brand_name} — write in a voice that fits this brand.`
     : ''
 

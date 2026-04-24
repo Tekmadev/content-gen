@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateAllPosts } from '@/lib/anthropic'
+import { getUserBrandBrief, buildBrandVoiceContext } from '@/lib/brand-brief'
 
 export const maxDuration = 60
 
@@ -15,10 +16,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'draftId and content are required' }, { status: 400 })
   }
 
+  // Load user's brand brief — if none, generation falls back to default TEKMADEV voice
+  const brief = await getUserBrandBrief(user.id)
+  const brandBriefContext = buildBrandVoiceContext(brief)
+
   // Reset to generating in case this is a retry
   await supabase.from('posts_log').update({ status: 'generating', error_message: null }).eq('id', draftId)
 
-  const posts = await generateAllPosts(content).catch(async (err: Error) => {
+  const posts = await generateAllPosts(content, brandBriefContext).catch(async (err: Error) => {
     await supabase
       .from('posts_log')
       .update({ status: 'failed', error_message: err.message })

@@ -5,6 +5,7 @@ import { generateCarousel, generateViralCarousel, analyzeAimImage } from '@/lib/
 import { generateViralCarouselSlides, generateCarouselCaption } from '@/lib/anthropic'
 import { canvaAutofill, canvaExport } from '@/lib/canva'
 import { checkAndDeductCredits, trackEvent, CREDIT_COSTS } from '@/lib/user-profile'
+import { getUserBrandBrief, buildBrandVoiceContext } from '@/lib/brand-brief'
 import type { CarouselPlatform, CarouselStyle, CarouselSlide, BrandSettings } from '@/lib/types'
 import type { AspectRatio } from '@/lib/gemini'
 import sharp from 'sharp'
@@ -108,6 +109,10 @@ export async function POST(request: Request) {
       ? { ...brandData, ...(brandOverride ?? {}) }
       : (brandOverride as BrandSettings | undefined)
 
+    // Load brand brief for voice/tone injection into Claude prompts
+    const brief = await getUserBrandBrief(user.id)
+    const brandBriefContext = buildBrandVoiceContext(brief)
+
     const adminSupabase = createAdminClient()
     const jobId = crypto.randomUUID()
 
@@ -183,7 +188,7 @@ export async function POST(request: Request) {
 
         // Generate 10 viral slide texts
         const slides = await generateViralCarouselSlides(
-          content, additionalInfo, aimStyleDescription, brandSettings
+          content, additionalInfo, aimStyleDescription, brandSettings, brandBriefContext
         )
 
         // Auto-fill Canva template + export to images
@@ -222,6 +227,7 @@ export async function POST(request: Request) {
           aspectRatio: aspectRatio ?? '3:4',
           style: style ?? 'dark_statement',
           brandSettings,
+          brandBriefContext,
         })
 
         await Promise.all(

@@ -282,6 +282,7 @@ export interface ViralCarouselConfig {
   aspectRatio?: AspectRatio
   style?: CarouselStyle
   brandSettings?: BrandSettings
+  brandBriefContext?: string | null
 }
 
 export interface GeneratedViralSlide extends ViralSlide {
@@ -395,7 +396,8 @@ export async function generateViralCarousel(config: ViralCarouselConfig): Promis
     config.content,
     config.additionalInfo,
     aimStyleDescription,
-    config.brandSettings
+    config.brandSettings,
+    config.brandBriefContext
   )
 
   // Step 3: Render each slide as an image via Gemini in parallel
