@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Tekmadev Social Manager',
-  description: 'Turn any content into LinkedIn, Instagram, and X posts',
+  title: 'Social Media System',
+  description: 'Turn any content into LinkedIn, Instagram, and X posts — powered by TEKMADEV',
 }
 
 export const viewport: Viewport = {
