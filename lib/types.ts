@@ -154,6 +154,66 @@ export interface CanvaToken {
   expires_at?: string
 }
 
+// ── Brand Brief ────────────────────────────────────────────────────────────
+
+export interface AudienceSegment {
+  name:        string
+  description: string
+  pain_points: string[]
+  goals:       string[]
+}
+
+export interface BriefService {
+  name:        string
+  description: string
+  key_message: string
+  outcome:     string
+}
+
+export interface ChatMessage {
+  role:    'user' | 'model'
+  content: string
+}
+
+export interface BrandBrief {
+  id?:                string
+  user_id?:           string
+  // Identity
+  business_name:      string
+  tagline:            string
+  founded:            string
+  location:           string
+  website:            string
+  business_description: string
+  mission:            string
+  // Audience
+  audiences:          AudienceSegment[]
+  // Personality
+  personality_words:  string[]
+  tone_of_voice:      string
+  brand_character:    string
+  // Services
+  services:           BriefService[]
+  unique_value:       string
+  // Content
+  content_pillars:    string[]
+  content_goals:      string
+  // Voice
+  always_say:         string[]
+  never_say:          string[]
+  example_phrases:    string[]
+  // Visuals
+  reference_images:   string[]
+  // Generated output
+  generated_brief:    string
+  brief_generated_at: string | null
+  // Chat state
+  chat_history:       ChatMessage[]
+  chat_completed:     boolean
+  created_at?:        string
+  updated_at?:        string
+}
+
 // ── Post Log ───────────────────────────────────────────────────────────────
 
 export interface PostLogEntry {
