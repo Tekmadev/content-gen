@@ -174,6 +174,7 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
     setUploading(true)
     setError('')
 
+    // Upload to Supabase Storage (Content/brand-refs/{user_id}/...) — returns public URLs
     const uploaded: string[] = []
     for (const file of files) {
       const fd = new FormData()
@@ -195,12 +196,25 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
     if (uploaded.length) {
       const next = [...referenceImages, ...uploaded]
       setReferenceImages(next)
+
+      // ⚡ Immediately persist the new image URLs to DB so they survive a refresh
+      // even if the user never sends a follow-up message. Don't await — non-blocking.
+      autosave(messages.map((m) => ({ role: m.role, content: m.content })), next)
+
+      // Send a chat message acknowledging the upload (passes fresh array to autosave inside send)
       await send('', uploaded)
     }
 
     setUploading(false)
     if (fileRef.current) fileRef.current.value = ''
   }
+
+  const removeReferenceImage = useCallback((index: number) => {
+    const next = referenceImages.filter((_, i) => i !== index)
+    setReferenceImages(next)
+    // Persist removal immediately
+    autosave(messages.map((m) => ({ role: m.role, content: m.content })), next)
+  }, [referenceImages, messages, autosave])
 
   // Auto-resize textarea
   useEffect(() => {
@@ -251,11 +265,24 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
         <div ref={bottomRef} />
       </div>
 
-      {/* Reference image thumbnails */}
+      {/* Reference image thumbnails — saved to Supabase Storage, persisted to DB */}
       {referenceImages.length > 0 && (
-        <div className="px-4 pb-2 flex gap-2 flex-wrap">
+        <div className="px-4 pb-2 flex gap-2 flex-wrap items-center">
+          <span className="text-xs text-[var(--muted-foreground)]">
+            {referenceImages.length} reference {referenceImages.length === 1 ? 'image' : 'images'} saved
+          </span>
           {referenceImages.map((url, i) => (
-            <img key={i} src={url} alt={`ref-${i}`} className="h-12 w-12 rounded-lg object-cover border border-[var(--border)]" />
+            <div key={i} className="relative group">
+              <img src={url} alt={`ref-${i}`} className="h-12 w-12 rounded-lg object-cover border border-[var(--border)]" />
+              <button
+                onClick={() => removeReferenceImage(i)}
+                disabled={streaming || generating}
+                aria-label="Remove image"
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       )}
