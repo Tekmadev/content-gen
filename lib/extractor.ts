@@ -121,7 +121,7 @@ async function extractPdf(pdfUrl: string): Promise<ExtractionResult> {
   const buffer = Buffer.from(await pdfRes.arrayBuffer())
   const base64 = buffer.toString('base64')
 
-  const model = 'gemini-2.0-flash'
+  const model = 'gemini-2.5-flash'
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {

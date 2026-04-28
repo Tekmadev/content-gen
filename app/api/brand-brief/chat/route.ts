@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getPlatformConfig } from '@/lib/platform-config'
 import type { ChatMessage } from '@/lib/types'
 
 export const maxDuration = 60
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
-const MODEL = 'gemini-2.0-flash'
 
 const SYSTEM_PROMPT = `You are "Brand", a friendly and knowledgeable brand strategist helping a business owner build their brand identity profile. This profile will be used to generate consistent, on-brand social media content for them automatically.
 
@@ -57,6 +57,11 @@ export async function POST(request: Request) {
   if (!message?.trim()) {
     return NextResponse.json({ error: 'Message is required' }, { status: 400 })
   }
+
+  // Read model from platform_config (admin-configurable, falls back to gemini-2.5-flash)
+  const { models } = await getPlatformConfig()
+  const MODEL = models.brand_chat ?? 'gemini-2.5-flash'
+  console.log('[brand-brief/chat] model=%s', MODEL)
 
   // Build conversation contents for Gemini
   const contents = [

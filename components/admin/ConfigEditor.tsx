@@ -24,24 +24,60 @@ import type { PlatformConfig } from '@/lib/platform-config'
 
 // ── Field metadata — edit here to add/rename/describe config keys ──────────
 
-const MODEL_OPTIONS = [
-  'claude-opus-4-6',
-  'claude-sonnet-4-5',
-  'claude-haiku-4-5',
-  'gemini-2.0-flash',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-image',
+// ── Claude models (for text generation tasks) ─────────────────────────────
+// Updated: claude-opus-4-7 (April 2026), claude-sonnet-4-6 (Feb 2026)
+const CLAUDE_MODEL_OPTIONS = [
+  'claude-opus-4-7',   // Latest (April 2026) — most capable, highest cost
+  'claude-sonnet-4-6', // Balanced speed + quality (Feb 2026)
+  'claude-haiku-4-5',  // Fastest, lowest cost
 ]
 
+// ── Gemini chat models (for text / reasoning tasks) ───────────────────────
+// gemini-2.5-flash is the stable production pick; gemini-3-flash-preview is newest
+const GEMINI_CHAT_MODEL_OPTIONS = [
+  'gemini-2.5-flash',        // Stable production — fast multimodal (recommended)
+  'gemini-3-flash-preview',  // Latest Gemini 3 (preview, 2026)
+  'gemini-2.0-flash',        // Previous generation
+]
+
+// ── Gemini image-generation models ────────────────────────────────────────
+// Updated: gemini-3.1-flash-image-preview = Nano Banana 2 (Feb 2026)
+const GEMINI_IMAGE_MODEL_OPTIONS = [
+  'gemini-3.1-flash-image-preview',        // Latest — Nano Banana 2 (Feb 2026)
+  'gemini-2.5-flash-image',                // Previous — Nano Banana
+  'gemini-2.0-flash-exp-image-generation', // Older generation
+]
+
+// ── OpenAI image models ───────────────────────────────────────────────────
+// Updated: gpt-image-2 (April 2026) is now the latest
+const OPENAI_IMAGE_MODEL_OPTIONS = [
+  'gpt-image-2', // Latest (April 2026) — reasoning-enhanced
+  'gpt-image-1', // Previous generation
+  'dall-e-3',    // Legacy
+]
+
+// ── Route each config field to the correct picker ─────────────────────────
+const GEMINI_CHAT_FIELDS  = new Set(['brand_chat'])
+const GEMINI_IMAGE_FIELDS = new Set(['image_generation'])
+const OPENAI_FIELDS       = new Set(['openai_image'])
+
+function getModelOptions(fieldKey: string): string[] {
+  if (OPENAI_FIELDS.has(fieldKey))       return OPENAI_IMAGE_MODEL_OPTIONS
+  if (GEMINI_IMAGE_FIELDS.has(fieldKey)) return GEMINI_IMAGE_MODEL_OPTIONS
+  if (GEMINI_CHAT_FIELDS.has(fieldKey))  return GEMINI_CHAT_MODEL_OPTIONS
+  return CLAUDE_MODEL_OPTIONS  // default: all Claude text-generation fields
+}
+
 const MODEL_FIELDS: Record<keyof PlatformConfig['models'], { label: string; hint: string }> = {
-  post_linkedin:    { label: 'LinkedIn posts',       hint: 'Model for generating LinkedIn post text' },
-  post_instagram:   { label: 'Instagram captions',   hint: 'Model for generating Instagram captions' },
-  post_x:           { label: 'X / Twitter posts',    hint: 'Model for generating X posts (280-char limit)' },
-  carousel_slides:  { label: 'Carousel slides',      hint: 'Model for generating 10 viral slide texts' },
-  carousel_caption: { label: 'Carousel caption',     hint: 'Model for generating the carousel Instagram caption' },
-  brand_chat:       { label: 'Brand discovery chat', hint: 'Model for the brand wizard chatbot' },
-  brand_generate:   { label: 'Brand brief generator',hint: 'Model that compiles the final brand brief' },
-  image_generation: { label: 'Image generation',     hint: 'Gemini model used to render carousel slide images' },
+  post_linkedin:    { label: 'LinkedIn posts',        hint: 'Claude model for LinkedIn post text generation' },
+  post_instagram:   { label: 'Instagram captions',    hint: 'Claude model for Instagram caption generation' },
+  post_x:           { label: 'X / Twitter posts',     hint: 'Claude model for X posts (280-char limit)' },
+  carousel_slides:  { label: 'Carousel slide text',   hint: 'Claude model for generating 10 viral slide texts' },
+  carousel_caption: { label: 'Carousel caption',      hint: 'Claude model for the carousel Instagram caption' },
+  brand_chat:       { label: 'Brand discovery chat',  hint: 'Gemini model for the brand wizard chatbot' },
+  brand_generate:   { label: 'Brand brief + SVG',     hint: 'Claude model for brand brief generation and Claude SVG carousel slides' },
+  image_generation: { label: 'Gemini image model',    hint: 'Gemini model for carousel image rendering (gemini backend)' },
+  openai_image:     { label: 'OpenAI image model',    hint: 'OpenAI model for carousel image rendering (openai backend) — gpt-image-2 is latest (April 2026)' },
 }
 
 const CREDIT_COST_FIELDS: Record<keyof PlatformConfig['credit_costs'], { label: string; hint: string }> = {
@@ -90,19 +126,28 @@ function FieldRow({ label, hint, children }: { label: string; hint: string; chil
   )
 }
 
-function ModelSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function ModelSelect({
+  fieldKey,
+  value,
+  onChange,
+}: {
+  fieldKey: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  const options = getModelOptions(fieldKey)
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
     >
-      {MODEL_OPTIONS.map((m) => (
+      {options.map((m) => (
         <option key={m} value={m}>{m}</option>
       ))}
       {/* If the current value isn't in the preset list, still show it */}
-      {!MODEL_OPTIONS.includes(value) && (
-        <option value={value}>{value}</option>
+      {!options.includes(value) && (
+        <option value={value}>{value} (custom)</option>
       )}
     </select>
   )
@@ -243,6 +288,7 @@ export default function ConfigEditor() {
         {(Object.keys(MODEL_FIELDS) as Array<keyof PlatformConfig['models']>).map((key) => (
           <FieldRow key={key} label={MODEL_FIELDS[key].label} hint={MODEL_FIELDS[key].hint}>
             <ModelSelect
+              fieldKey={key}
               value={draft.models[key]}
               onChange={(v) => patchModels(key, v)}
             />

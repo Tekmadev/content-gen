@@ -164,7 +164,7 @@ export interface SVGSlideResult {
 
 /**
  * Generate a single carousel slide as SVG → PNG.
- * Uses the platform-configured Claude model (falls back to claude-opus-4-6).
+ * Uses the platform-configured Claude model (falls back to claude-opus-4-7).
  */
 export async function generateSVGSlide(
   slide: ViralSlide,
@@ -177,7 +177,7 @@ export async function generateSVGSlide(
   const { models } = await getPlatformConfig()
 
   // Use brand_generate model (good reasoning for code) or fall back
-  const model = models.brand_generate ?? 'claude-opus-4-6'
+  const model = models.brand_generate ?? 'claude-opus-4-7'
 
   const message = await client.messages.create({
     model,

@@ -8,6 +8,7 @@ import { generateImageWithOpenAI } from './openai-image'
 import { generateViralCarouselSVG } from './claude-svg'
 import { CAROUSEL_STYLES } from './carousel-styles'
 import { generateViralCarouselSlides } from './anthropic'
+import { getPlatformConfig } from './platform-config'
 import type { CarouselPlatform, CarouselStyle, BrandSettings, ImageGenerator, ViralSlide } from './types'
 
 export type { CarouselPlatform, CarouselStyle, ViralSlide }
@@ -98,8 +99,9 @@ Generate exactly ${config.numSlides} slide(s) now:`
 
 async function generateSlideTexts(config: CarouselConfig): Promise<SlideSpec[]> {
   const client = getAnthropicClient()
+  const { models } = await getPlatformConfig()
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: models.carousel_slides ?? 'claude-opus-4-7',
     max_tokens: 512,
     messages: [{ role: 'user', content: buildSlideTextPrompt(config) }],
   })
@@ -231,12 +233,13 @@ async function generateImagePromptWithClaude(
   brandSettings?: BrandSettings
 ): Promise<string> {
   const client = getAnthropicClient()
+  const { models } = await getPlatformConfig()
   const { label: styleLabel, description: styleDesc } = CAROUSEL_STYLES[style]
   const platformLabel = formatLabel(platform, ratio)
   const brandSection = brandSettings ? buildBrandSection(brandSettings) : ''
 
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: models.carousel_slides ?? 'claude-opus-4-7',
     max_tokens: 600,
     messages: [{
       role: 'user',
@@ -306,8 +309,9 @@ export async function analyzeAimImage(
   mimeType: string
 ): Promise<string> {
   const client = getAnthropicClient()
+  const { models } = await getPlatformConfig()
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: models.brand_generate ?? 'claude-opus-4-7',
     max_tokens: 250,
     messages: [{
       role: 'user',

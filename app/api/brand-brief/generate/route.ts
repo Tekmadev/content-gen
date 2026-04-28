@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getPlatformConfig } from '@/lib/platform-config'
 import type { ChatMessage, BrandBrief } from '@/lib/types'
 
 export const maxDuration = 120
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
-const MODEL = 'gemini-2.0-flash'
 
 function getHeaders() {
   const key = process.env.GEMINI_API_KEY
@@ -16,8 +16,8 @@ function getHeaders() {
   }
 }
 
-async function callGemini(prompt: string): Promise<string> {
-  const res = await fetch(`${GEMINI_BASE}/${MODEL}:generateContent`, {
+async function callGemini(model: string, prompt: string): Promise<string> {
+  const res = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({
@@ -45,6 +45,11 @@ export async function POST(request: Request) {
   if (!chat_history?.length) {
     return NextResponse.json({ error: 'chat_history is required' }, { status: 400 })
   }
+
+  // Read model from platform_config (admin-configurable, falls back to gemini-2.5-flash)
+  const { models } = await getPlatformConfig()
+  const model = models.brand_chat ?? 'gemini-2.5-flash'
+  console.log('[brand-brief/generate] model=%s', model)
 
   const conversationText = chat_history
     .map((m) => `${m.role === 'user' ? 'CLIENT' : 'BRAND STRATEGIST'}: ${m.content}`)
@@ -86,7 +91,7 @@ Return ONLY the JSON. No markdown fences, no commentary.`
 
   let structured: Partial<BrandBrief> = {}
   try {
-    const rawJson = await callGemini(extractPrompt)
+    const rawJson = await callGemini(model, extractPrompt)
     const cleaned = rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     structured = JSON.parse(cleaned)
   } catch (err) {
@@ -139,7 +144,7 @@ A compact table: Brand in 3 words | Tone | Audience | Core message | Never say |
 
 Be specific, vivid, and detailed. Use the actual brand information — do not use placeholders. Write as if this will be handed to a content creator who has never heard of this brand.`
 
-  const generatedBrief = await callGemini(briefPrompt)
+  const generatedBrief = await callGemini(model, briefPrompt)
 
   // Step 3 — save everything to the database
   const now = new Date().toISOString()

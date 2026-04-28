@@ -39,10 +39,12 @@ export interface ModelConfig {
   carousel_caption: string
   /** Gemini model for brand discovery chatbot */
   brand_chat: string
-  /** Gemini model for brand brief extraction + generation */
+  /** Gemini model for brand brief extraction + generation + Claude SVG slides */
   brand_generate: string
-  /** Gemini model for carousel image rendering */
+  /** Gemini model for carousel image rendering (when using Gemini backend) */
   image_generation: string
+  /** OpenAI model for carousel image rendering (when using OpenAI backend) */
+  openai_image: string
 }
 
 /** Credits deducted from a user's balance per action. */
@@ -80,14 +82,19 @@ export interface PlatformConfig {
 
 const DEFAULT_CONFIG: PlatformConfig = {
   models: {
-    post_linkedin:    'claude-opus-4-6',
-    post_instagram:   'claude-opus-4-6',
-    post_x:           'claude-opus-4-6',
-    carousel_slides:  'claude-opus-4-6',
-    carousel_caption: 'claude-opus-4-6',
-    brand_chat:       'gemini-2.0-flash',
-    brand_generate:   'gemini-2.0-flash',
-    image_generation: 'gemini-2.5-flash-image',
+    // ── Claude text models (updated: claude-opus-4-7, April 2026) ──────────
+    post_linkedin:    'claude-opus-4-7',
+    post_instagram:   'claude-opus-4-7',
+    post_x:           'claude-opus-4-7',
+    carousel_slides:  'claude-opus-4-7',
+    carousel_caption: 'claude-opus-4-7',
+    brand_generate:   'claude-opus-4-7',
+    // ── Gemini chat (updated: gemini-2.5-flash, stable production) ─────────
+    brand_chat:       'gemini-2.5-flash',
+    // ── Gemini image (updated: gemini-3.1-flash-image-preview, Feb 2026) ───
+    image_generation: 'gemini-3.1-flash-image-preview',
+    // ── OpenAI image (updated: gpt-image-2, April 2026) ────────────────────
+    openai_image:     'gpt-image-2',
   },
   credit_costs: {
     post_gen: 1,
@@ -100,13 +107,20 @@ const DEFAULT_CONFIG: PlatformConfig = {
     agency:  500,
   },
   api_cost_estimates: {
+    // Claude Opus 4.7 — April 2026 pricing
     claude_opus_input_per_mtok:    15.00,
     claude_opus_output_per_mtok:   75.00,
+    // Claude Sonnet 4.6 — Feb 2026 pricing
     claude_sonnet_input_per_mtok:   3.00,
     claude_sonnet_output_per_mtok: 15.00,
+    // Claude Haiku 4.5 pricing
     claude_haiku_input_per_mtok:    0.80,
     claude_haiku_output_per_mtok:   4.00,
+    // Gemini 3.1 Flash Image Preview (Nano Banana 2) — Feb 2026
     gemini_flash_image_per_image:   0.04,
+    // OpenAI gpt-image-2 — April 2026 (medium quality)
+    openai_gpt_image_2_per_image:   0.07,
+    // Infrastructure
     supadata_per_request:           0.01,
     ayrshare_monthly_usd:          29.00,
   },

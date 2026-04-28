@@ -1,84 +1,103 @@
 /**
- * OpenAI DALL-E 3 Image Generation
+ * OpenAI Image Generation — gpt-image-2
  *
- * Used as an alternative image backend for carousel slides.
- * DALL-E 3 produces vivid, high-fidelity images with strong prompt adherence.
+ * Uses OpenAI's latest image model (gpt-image-2, released April 21, 2026).
+ * gpt-image-2 integrates O-series reasoning before generating — it plans,
+ * researches, and reasons about image structure before rendering.
  *
- * Size mapping:
- *   portrait (3:4, 4:5, 9:16)  → 1024×1792
- *   landscape (16:9, 2:1, 4:3) → 1792×1024
- *   square (1:1)               → 1024×1024
+ * API surface (same as gpt-image-1, backward-compatible):
+ *   - Sizes:   1024×1024 | 1024×1536 (portrait) | 1536×1024 (landscape) | auto
+ *   - Quality: auto | high | medium | low
+ *   - Always returns base64 PNG — no response_format needed
+ *   - No revised_prompt in response
+ *
+ * The model name is read from platform_config (models.openai_image)
+ * so it can be swapped in the admin panel without a redeploy.
+ * Default fallback: 'gpt-image-2'
  *
  * Requires: OPENAI_API_KEY environment variable
  */
+
+import { getPlatformConfig } from './platform-config'
 
 const OPENAI_BASE = 'https://api.openai.com/v1'
 
 function getHeaders() {
   const key = process.env.OPENAI_API_KEY
-  if (!key) throw new Error('OPENAI_API_KEY is not set. Add it to your environment variables.')
+  if (!key) throw new Error('OPENAI_API_KEY is not set. Add it to your Vercel environment variables.')
   return {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${key}`,
   }
 }
 
-/** DALL-E 3 only supports these three sizes */
-type DallESize = '1024x1024' | '1024x1792' | '1792x1024'
+/**
+ * gpt-image-2 supported sizes (identical to gpt-image-1, backward-compatible).
+ * NOTE: These differ from DALL-E 3 (which used 1024x1792 for portrait).
+ */
+type GPTImageSize =
+  | '1024x1024'   // square
+  | '1024x1536'   // portrait  (replaces dall-e-3's 1024x1792)
+  | '1536x1024'   // landscape (replaces dall-e-3's 1792x1024)
+  | 'auto'
 
-function mapAspectRatio(ratio: string): DallESize {
-  const portraitRatios = ['3:4', '4:5', '9:16', '2:3']
-  const landscapeRatios = ['16:9', '4:3', '2:1', '3:2']
-  if (portraitRatios.includes(ratio)) return '1024x1792'
-  if (landscapeRatios.includes(ratio)) return '1792x1024'
-  return '1024x1024' // square (1:1)
+function mapAspectRatio(ratio: string): GPTImageSize {
+  const portrait  = ['3:4', '4:5', '9:16', '2:3']
+  const landscape = ['16:9', '4:3', '2:1', '3:2']
+  if (portrait.includes(ratio))  return '1024x1536'
+  if (landscape.includes(ratio)) return '1536x1024'
+  return '1024x1024' // square (1:1) or unknown
 }
 
 export interface OpenAIImageResult {
-  data: string         // base64-encoded image
+  data: string        // base64-encoded PNG
   mimeType: 'image/png'
-  revisedPrompt?: string
 }
 
 /**
- * Generate a single image with DALL-E 3.
- * Returns base64 PNG data. Never returns URLs (avoids expiry issues).
+ * Generate a single image with gpt-image-2 (or whichever model is configured).
+ * Returns base64 PNG data — ready for Buffer.from(data, 'base64').
+ *
+ * Model is read from platform_config (models.openai_image → default: 'gpt-image-2').
  */
 export async function generateImageWithOpenAI(
   prompt: string,
   aspectRatio: string = '1:1',
-  quality: 'standard' | 'hd' = 'hd'
+  quality: 'auto' | 'high' | 'medium' | 'low' = 'high'
 ): Promise<OpenAIImageResult> {
-  const size = mapAspectRatio(aspectRatio)
+  const { models } = await getPlatformConfig()
+  const model = models.openai_image ?? 'gpt-image-2'
+  const size  = mapAspectRatio(aspectRatio)
+
+  console.log('[openai-image] model=%s size=%s quality=%s', model, size, quality)
 
   const res = await fetch(`${OPENAI_BASE}/images/generations`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({
-      model: 'dall-e-3',
+      model,
       prompt,
       n: 1,
       size,
       quality,
-      response_format: 'b64_json',
+      // gpt-image-2 returns b64_json by default — no response_format needed
     }),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`DALL-E 3 image generation failed (${res.status}): ${err}`)
+    throw new Error(`OpenAI image generation failed (${res.status}): ${err}`)
   }
 
   const json = await res.json()
-  const item = json.data?.[0]
+  const b64  = json.data?.[0]?.b64_json
 
-  if (!item?.b64_json) {
-    throw new Error('OpenAI returned no image data. Check your API key and billing status.')
+  if (!b64) {
+    throw new Error(
+      'OpenAI returned no image data. ' +
+      'Check your OPENAI_API_KEY, billing status, and that you have access to gpt-image-2.'
+    )
   }
 
-  return {
-    data: item.b64_json,
-    mimeType: 'image/png',
-    revisedPrompt: item.revised_prompt,
-  }
+  return { data: b64, mimeType: 'image/png' }
 }
