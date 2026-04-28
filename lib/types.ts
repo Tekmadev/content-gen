@@ -82,6 +82,17 @@ export interface PostDraft {
   published_at?: string
 }
 
+// ── Image Generator ────────────────────────────────────────────────────────
+
+/**
+ * Which backend generates carousel slide images.
+ *   gemini     — Gemini image generation (default, photorealistic)
+ *   openai     — OpenAI DALL-E 3 (vivid, high quality)
+ *   claude_svg — Claude generates SVG code → rendered to PNG (pixel-perfect brand accuracy)
+ *   canva      — Canva template auto-fill (requires connected account + template ID)
+ */
+export type ImageGenerator = 'gemini' | 'openai' | 'claude_svg' | 'canva'
+
 // ── Brand Settings ─────────────────────────────────────────────────────────
 
 export interface BrandSettings {
@@ -94,9 +105,9 @@ export interface BrandSettings {
   brand_name:       string   // optional brand/company name
   logo_url?:        string   // public URL of uploaded brand logo (composited onto slides)
   // Carousel AI settings
-  carousel_image_model:   string  // 'gemini' | 'canva'
-  carousel_custom_prompt: string  // '' = use built-in style prompts
-  canva_template_id?:     string  // Canva brand template ID for auto-fill
+  carousel_image_model:   ImageGenerator  // which backend generates slide images
+  carousel_custom_prompt: string          // '' = use built-in style prompts
+  canva_template_id?:     string          // Canva brand template ID for auto-fill
 }
 
 // ── Carousel / Image Generator Types ──────────────────────────────────────

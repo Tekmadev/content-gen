@@ -708,17 +708,19 @@ export default function SettingsPage() {
 
           {/* Model picker */}
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-[var(--foreground)]">Image Generation Model</label>
+            <label className="text-xs font-medium text-[var(--foreground)]">Default Image Generator</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
-                { id: 'gemini',    label: 'Gemini (Nano Banana)', desc: "Direct image generation by Google",                              available: true },
-                { id: 'anthropic', label: 'Anthropic Claude',     desc: 'Claude writes a creative prompt — Gemini renders it',            available: true },
-              ] as { id: string; label: string; desc: string; available: boolean }[]).map(({ id, label, desc, available }) => (
+                { id: 'gemini',     icon: '✦', label: 'Gemini AI',    desc: 'Google AI image generation. Fast, photorealistic.',         available: true },
+                { id: 'openai',     icon: '⬡', label: 'DALL-E 3',     desc: 'OpenAI image generation. Vivid, high-fidelity quality.',   available: true },
+                { id: 'claude_svg', icon: '◈', label: 'Claude SVG',   desc: 'Vector graphics by Claude. Pixel-perfect brand accuracy.', available: true },
+                { id: 'canva',      icon: '🎨', label: 'Canva',        desc: 'Your Canva brand template. Requires connected account.',   available: true },
+              ] as { id: string; icon: string; label: string; desc: string; available: boolean }[]).map(({ id, icon, label, desc, available }) => (
                 <button
                   key={id}
                   type="button"
                   disabled={!available}
-                  onClick={() => setBrand((b) => ({ ...b, carousel_image_model: id }))}
+                  onClick={() => setBrand((b) => ({ ...b, carousel_image_model: id as import('@/lib/types').ImageGenerator }))}
                   className={[
                     'text-left p-3 rounded-xl border transition-all',
                     brand.carousel_image_model === id && available
@@ -728,11 +730,11 @@ export default function SettingsPage() {
                   ].join(' ')}
                 >
                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <p className="text-sm font-medium text-[var(--foreground)]">{label}</p>
-                    {!available ? (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-[var(--muted)]/10 text-[var(--muted)] rounded-full">Soon</span>
-                    ) : brand.carousel_image_model === id ? (
-                      <svg className="w-4 h-4 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <p className="text-sm font-medium text-[var(--foreground)]">
+                      <span className="mr-1.5">{icon}</span>{label}
+                    </p>
+                    {brand.carousel_image_model === id && available ? (
+                      <svg className="w-4 h-4 text-[var(--primary)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                     ) : null}
@@ -741,7 +743,7 @@ export default function SettingsPage() {
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-[var(--muted)]">More models coming soon (OpenAI DALL-E, Stable Diffusion…)</p>
+            <p className="text-[11px] text-[var(--muted)]">This sets your default. You can override per carousel in the Studio.</p>
           </div>
 
           {/* Custom prompt */}

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
 import { CAROUSEL_STYLES } from '@/lib/carousel-styles'
-import type { BrandSettings, CarouselSlide, CarouselStyle, SourceType } from '@/lib/types'
+import type { BrandSettings, CarouselSlide, CarouselStyle, ImageGenerator, SourceType } from '@/lib/types'
 import type { AspectRatio } from '@/lib/gemini'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ function CarouselStudioContent() {
   const [brandOverride, setBrandOverride] = useState<Partial<BrandSettings>>({})
 
   // ── Generator ─────────────────────────────────────────────────────────────
-  const [imageGenerator, setImageGenerator] = useState<'gemini' | 'canva'>('gemini')
+  const [imageGenerator, setImageGenerator] = useState<ImageGenerator>('gemini')
   const [canvaConnected, setCanvaConnected] = useState(false)
   const [canvaTemplateId, setCanvaTemplateId] = useState('')
   const [style, setStyle] = useState<CarouselStyle>('dark_statement')
@@ -533,27 +533,67 @@ function CarouselStudioContent() {
 
             {/* 4. Image Generator */}
             <div className="bg-white rounded-2xl border border-[var(--border)] p-5 flex flex-col gap-4">
-              <h2 className="font-semibold text-sm text-[var(--foreground)]">4. Image Generator</h2>
+              <div>
+                <h2 className="font-semibold text-sm text-[var(--foreground)]">4. Image Generator</h2>
+                <p className="text-xs text-[var(--muted)] mt-0.5">Choose how slide visuals are created.</p>
+              </div>
 
+              {/* 4-option picker */}
               <div className="grid grid-cols-2 gap-2">
-                {(['gemini', 'canva'] as const).map((g) => (
+                {(
+                  [
+                    {
+                      id: 'gemini' as ImageGenerator,
+                      icon: '✦',
+                      label: 'Gemini AI',
+                      desc: 'Google AI image generation',
+                    },
+                    {
+                      id: 'openai' as ImageGenerator,
+                      icon: '⬡',
+                      label: 'DALL-E 3',
+                      desc: 'OpenAI — vivid quality',
+                    },
+                    {
+                      id: 'claude_svg' as ImageGenerator,
+                      icon: '◈',
+                      label: 'Claude SVG',
+                      desc: 'Vector graphics — brand-perfect',
+                      badge: 'Tekmadev',
+                    },
+                    {
+                      id: 'canva' as ImageGenerator,
+                      icon: '🎨',
+                      label: 'Canva',
+                      desc: 'Your brand template',
+                    },
+                  ] as { id: ImageGenerator; icon: string; label: string; desc: string; badge?: string }[]
+                ).map(({ id, icon, label, desc, badge }) => (
                   <button
-                    key={g}
-                    onClick={() => setImageGenerator(g)}
-                    className={`flex flex-col items-center gap-1.5 py-3 px-3 rounded-xl border text-center transition-all ${
-                      imageGenerator === g
+                    key={id}
+                    onClick={() => setImageGenerator(id)}
+                    className={`flex flex-col gap-1 py-3 px-3 rounded-xl border text-left transition-all ${
+                      imageGenerator === id
                         ? 'border-[var(--primary)] bg-[var(--primary)]/5 ring-1 ring-[var(--primary)]'
                         : 'border-[var(--border)] hover:border-[var(--primary)]/40 hover:bg-[var(--surface)]'
                     }`}
                   >
-                    <span className="text-xl">{g === 'gemini' ? '✦' : '🎨'}</span>
-                    <span className="text-sm font-semibold text-[var(--foreground)] capitalize">{g === 'gemini' ? 'Nano Banana' : 'Canva'}</span>
-                    <span className="text-xs text-[var(--muted)]">{g === 'gemini' ? 'AI-generated images' : 'Your Canva template'}</span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-base">{icon}</span>
+                      {badge && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 bg-[var(--primary)]/10 text-[var(--primary)] rounded-full leading-none">
+                          {badge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold text-[var(--foreground)]">{label}</span>
+                    <span className="text-[11px] text-[var(--muted)] leading-tight">{desc}</span>
                   </button>
                 ))}
               </div>
 
-              {imageGenerator === 'gemini' && (
+              {/* Style picker — shown for all AI image generators */}
+              {(imageGenerator === 'gemini' || imageGenerator === 'openai' || imageGenerator === 'claude_svg') && (
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-medium text-[var(--foreground)]">Visual Style</label>
                   <div className="flex flex-col gap-1.5">
@@ -578,9 +618,20 @@ function CarouselStudioContent() {
                       )
                     })}
                   </div>
+                  {imageGenerator === 'claude_svg' && (
+                    <p className="text-[11px] text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
+                      ◈ Claude generates pure SVG code for each slide — pixel-perfect brand colors, no AI hallucinations. Ideal for Tekmadev-style precision graphics.
+                    </p>
+                  )}
+                  {imageGenerator === 'openai' && (
+                    <p className="text-[11px] text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
+                      ⬡ Requires <code className="font-mono">OPENAI_API_KEY</code> in your environment. DALL-E 3 outputs 1024px images — sizes are auto-mapped to nearest supported ratio.
+                    </p>
+                  )}
                 </div>
               )}
 
+              {/* Canva section */}
               {imageGenerator === 'canva' && (
                 <div className="flex flex-col gap-3">
                   {canvaConnected ? (
@@ -607,7 +658,6 @@ function CarouselStudioContent() {
                       Connect Canva Account
                     </a>
                   )}
-
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-[var(--foreground)]">Brand Template ID</label>
                     <input
@@ -618,9 +668,8 @@ function CarouselStudioContent() {
                       className="w-full px-3 py-2.5 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     />
                     <p className="text-xs text-[var(--muted)] leading-relaxed">
-                      Your Canva template must have 10 pages with text fields named{' '}
-                      <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-[10px]">slide_1</code> through{' '}
-                      <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-[10px]">slide_10</code>.
+                      Template must have 10 pages with text fields named{' '}
+                      <code className="bg-[var(--surface)] px-1 py-0.5 rounded text-[10px]">slide_1</code>–<code className="bg-[var(--surface)] px-1 py-0.5 rounded text-[10px]">slide_10</code>.
                     </p>
                   </div>
                 </div>
@@ -628,7 +677,7 @@ function CarouselStudioContent() {
             </div>
 
             {/* 5. Aspect Ratio */}
-            {imageGenerator === 'gemini' && (
+            {imageGenerator !== 'canva' && (
               <div className="bg-white rounded-2xl border border-[var(--border)] p-5 flex flex-col gap-3">
                 <h2 className="font-semibold text-sm text-[var(--foreground)]">5. Aspect Ratio</h2>
                 <div className="grid grid-cols-3 gap-2">
@@ -657,7 +706,7 @@ function CarouselStudioContent() {
             {/* Generate button */}
             <button
               onClick={handleGenerate}
-              disabled={generating || !hasContent || (imageGenerator === 'canva' && !canvaConnected)}
+              disabled={generating || !hasContent || (imageGenerator === 'canva' && !canvaConnected) || (imageGenerator === 'canva' && !canvaTemplateId.trim())}
               className="w-full py-4 px-4 bg-[var(--primary)] text-white rounded-2xl font-semibold text-sm hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {generating ? (

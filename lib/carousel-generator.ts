@@ -1,11 +1,14 @@
-// Carousel Generator — combines Claude (slide texts) + Nano Banana (images)
-// Pipeline: extracted content → Claude generates N slide texts → Gemini renders N images
+// Carousel Generator — Claude (slide texts) + pluggable image backends
+// Backends: Gemini (default) | OpenAI DALL-E 3 | Claude SVG | Canva (handled in API route)
+// Pipeline: extracted content → Claude generates slide texts → selected backend renders images
 
 import Anthropic from '@anthropic-ai/sdk'
 import { generateImage, type AspectRatio } from './gemini'
+import { generateImageWithOpenAI } from './openai-image'
+import { generateViralCarouselSVG } from './claude-svg'
 import { CAROUSEL_STYLES } from './carousel-styles'
 import { generateViralCarouselSlides } from './anthropic'
-import type { CarouselPlatform, CarouselStyle, BrandSettings, ViralSlide } from './types'
+import type { CarouselPlatform, CarouselStyle, BrandSettings, ImageGenerator, ViralSlide } from './types'
 
 export type { CarouselPlatform, CarouselStyle, ViralSlide }
 export { CAROUSEL_STYLES }
@@ -277,12 +280,14 @@ Rules:
 export interface ViralCarouselConfig {
   content: string
   additionalInfo?: string
-  aimImageBase64?: string   // reference image uploaded by user
-  aimImageMime?: string     // mime type of the AIM image
+  aimImageBase64?: string    // reference image uploaded by user
+  aimImageMime?: string      // mime type of the AIM image
   aspectRatio?: AspectRatio
   style?: CarouselStyle
   brandSettings?: BrandSettings
   brandBriefContext?: string | null
+  /** Which image backend to use. Defaults to 'gemini'. Canva is handled in the API route. */
+  imageGenerator?: Exclude<ImageGenerator, 'canva'>
 }
 
 export interface GeneratedViralSlide extends ViralSlide {
@@ -384,8 +389,11 @@ export async function generateViralCarousel(config: ViralCarouselConfig): Promis
   const platform: CarouselPlatform = 'instagram_carousel'
   const ratio: AspectRatio = config.aspectRatio ?? '3:4'
   const style = config.style ?? 'dark_statement'
+  const backend = config.imageGenerator ?? 'gemini'
 
-  // Step 1: Analyze AIM reference image if provided
+  console.log('[carousel-generator] backend=%s style=%s ratio=%s', backend, style, ratio)
+
+  // Step 1: Analyze AIM reference image if provided (all backends benefit from this)
   let aimStyleDescription: string | undefined
   if (config.aimImageBase64 && config.aimImageMime) {
     aimStyleDescription = await analyzeAimImage(config.aimImageBase64, config.aimImageMime)
@@ -400,14 +408,34 @@ export async function generateViralCarousel(config: ViralCarouselConfig): Promis
     config.brandBriefContext
   )
 
-  // Step 3: Render each slide as an image via Gemini in parallel
-  const generated = await Promise.all(
-    slides.map(async (slide) => {
-      const prompt = buildViralImagePrompt(slide, slides.length, platform, ratio, aimStyleDescription, config.brandSettings, style)
-      const imageData = await generateImage(prompt, ratio)
-      return { ...slide, base64: imageData.data, mimeType: imageData.mimeType }
-    })
-  )
+  // Step 3: Render images — route to the selected backend
+  let generated: GeneratedViralSlide[]
+
+  if (backend === 'claude_svg') {
+    // ── Claude SVG: code-based, pixel-perfect, brand-accurate ────────────
+    const svgSlides = await generateViralCarouselSVG(slides, ratio, style, config.brandSettings)
+    generated = svgSlides as GeneratedViralSlide[]
+
+  } else if (backend === 'openai') {
+    // ── OpenAI DALL-E 3: vivid, photorealistic ────────────────────────────
+    generated = await Promise.all(
+      slides.map(async (slide) => {
+        const prompt = buildViralImagePrompt(slide, slides.length, platform, ratio, aimStyleDescription, config.brandSettings, style)
+        const imageData = await generateImageWithOpenAI(prompt, ratio)
+        return { ...slide, base64: imageData.data, mimeType: imageData.mimeType }
+      })
+    )
+
+  } else {
+    // ── Gemini (default): AI image generation ─────────────────────────────
+    generated = await Promise.all(
+      slides.map(async (slide) => {
+        const prompt = buildViralImagePrompt(slide, slides.length, platform, ratio, aimStyleDescription, config.brandSettings, style)
+        const imageData = await generateImage(prompt, ratio)
+        return { ...slide, base64: imageData.data, mimeType: imageData.mimeType }
+      })
+    )
+  }
 
   return generated
 }
@@ -433,17 +461,11 @@ export async function generateCarousel(config: CarouselConfig): Promise<Generate
 
       let imageData: { data: string; mimeType: string }
 
-      if (imageModel === 'anthropic') {
-        // Claude writes a detailed creative prompt → Gemini renders it
-        const claudePrompt = await generateImagePromptWithClaude(
-          slide, config.style, clampedSlides, config.platform, aspectRatio, config.brandSettings
-        )
-        imageData = await generateImage(claudePrompt, aspectRatio)
-      } else if (imageModel === 'gemini') {
-        imageData = await generateImage(prompt, aspectRatio)
+      if (imageModel === 'openai') {
+        imageData = await generateImageWithOpenAI(prompt, aspectRatio)
       } else {
-        // Future models (OpenAI DALL-E, Stable Diffusion, etc.) plug in here
-        throw new Error(`Image model "${imageModel}" is not yet supported.`)
+        // gemini (default) — claude_svg not available in standard mode
+        imageData = await generateImage(prompt, aspectRatio)
       }
 
       return {

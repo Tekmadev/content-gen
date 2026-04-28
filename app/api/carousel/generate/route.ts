@@ -6,7 +6,7 @@ import { generateViralCarouselSlides, generateCarouselCaption } from '@/lib/anth
 import { canvaAutofill, canvaExport } from '@/lib/canva'
 import { checkAndDeductCredits, trackEvent, CREDIT_COSTS } from '@/lib/user-profile'
 import { getUserBrandBrief, buildBrandVoiceContext } from '@/lib/brand-brief'
-import type { CarouselPlatform, CarouselStyle, CarouselSlide, BrandSettings } from '@/lib/types'
+import type { CarouselPlatform, CarouselStyle, CarouselSlide, BrandSettings, ImageGenerator } from '@/lib/types'
 import type { AspectRatio } from '@/lib/gemini'
 import sharp from 'sharp'
 
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     aimImageBase64?: string
     aimImageMime?: string
     brandOverride?: Partial<BrandSettings>
-    imageGenerator?: 'gemini' | 'canva'
+    imageGenerator?: ImageGenerator
     canvaTemplateId?: string
   } = body
 
@@ -218,7 +218,9 @@ export async function POST(request: Request) {
         uploadedSlides.sort((a, b) => a.number - b.number)
 
       } else {
-        // ── Gemini path ───────────────────────────────────────────────
+        // ── Gemini / OpenAI DALL-E 3 / Claude SVG path ───────────────
+        // (Canva is handled above — imageGenerator here is never 'canva')
+        const backend = imageGenerator ?? 'gemini'
         const generatedSlides = await generateViralCarousel({
           content,
           additionalInfo,
@@ -228,6 +230,7 @@ export async function POST(request: Request) {
           style: style ?? 'dark_statement',
           brandSettings,
           brandBriefContext,
+          imageGenerator: backend,
         })
 
         await Promise.all(
