@@ -85,7 +85,9 @@ export async function POST(request: Request) {
         contents,
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 512,
+          // 1024 leaves enough headroom for the closing message + the BRIEF_COMPLETE JSON.
+          // 512 was getting truncated mid-sentence and the marker never reached the client.
+          maxOutputTokens: 1024,
         },
       }),
     }

@@ -171,18 +171,7 @@ interface Account {
   subAccounts: { id: string; name: string }[]
 }
 
-const FONT_OPTIONS = [
-  'Inter',
-  'Helvetica Neue',
-  'Montserrat',
-  'Playfair Display',
-  'Georgia',
-  'Raleway',
-  'Roboto',
-  'Source Serif',
-  'DM Sans',
-  'Space Grotesk',
-]
+// FONT_OPTIONS moved to BrandStyleSection (used on /brand page)
 
 const DEFAULT_BRAND: BrandSettings = {
   primary_color:          '#000000',
@@ -238,18 +227,11 @@ export default function SettingsPage() {
   const [brief, setBrief] = useState<BrandBrief | null>(null)
   const [briefLoading, setBriefLoading] = useState(true)
 
-  // Brand settings
+  // Brand settings — only used here for Carousel AI section now
+  // (Brand Style UI moved to /brand). Carousel AI shares the same brand object + API.
   const [brand, setBrand] = useState<BrandSettings>(DEFAULT_BRAND)
-  const [savingBrand, setSavingBrand] = useState(false)
-  const [brandSaved, setBrandSaved] = useState(false)
-  const [brandError, setBrandError] = useState('')
 
-  // Logo upload
-  const [logoUploading, setLogoUploading] = useState(false)
-  const [logoError, setLogoError] = useState('')
-  const logoInputRef = useRef<HTMLInputElement>(null)
-
-  // Carousel AI settings (shares the same brand object + API)
+  // Carousel AI settings
   const [savingCarousel, setSavingCarousel] = useState(false)
   const [carouselSaved, setCarouselSaved] = useState(false)
   const [carouselError, setCarouselError] = useState('')
@@ -305,52 +287,7 @@ export default function SettingsPage() {
     setSavingProfile(false)
   }
 
-  async function saveBrandSettings() {
-    setSavingBrand(true)
-    setBrandError('')
-    setBrandSaved(false)
-    try {
-      const res = await fetch('/api/brand-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(brand),
-      })
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error || 'Save failed')
-      }
-      setBrandSaved(true)
-      setTimeout(() => setBrandSaved(false), 3000)
-    } catch (err) {
-      setBrandError(err instanceof Error ? err.message : 'Save failed')
-    }
-    setSavingBrand(false)
-  }
-
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setLogoUploading(true)
-    setLogoError('')
-    try {
-      const form = new FormData()
-      form.append('logo', file)
-      const res = await fetch('/api/brand-settings/logo', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      setBrand((b) => ({ ...b, logo_url: data.logo_url }))
-    } catch (err) {
-      setLogoError(err instanceof Error ? err.message : 'Upload failed')
-    }
-    setLogoUploading(false)
-    if (logoInputRef.current) logoInputRef.current.value = ''
-  }
-
-  async function handleLogoRemove() {
-    setLogoError('')
-    await fetch('/api/brand-settings/logo', { method: 'DELETE' })
-    setBrand((b) => ({ ...b, logo_url: '' }))
-  }
+  // saveBrandSettings + handleLogoUpload + handleLogoRemove moved to BrandStyleSection (/brand page)
 
   async function saveCarouselSettings() {
     setSavingCarousel(true)
@@ -729,155 +666,24 @@ export default function SettingsPage() {
           )}
         </section>
 
-        {/* Brand Style */}
-        <section className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex flex-col gap-5">
-          <div>
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--muted)]">Brand Style</h2>
-            <p className="text-xs text-[var(--muted)] mt-1">
-              These colors and font are injected into every Nano Banana image generation so all visuals stay on-brand automatically.
-            </p>
-          </div>
-
-          {/* Preview strip */}
-          <div
-            className="w-full h-20 rounded-xl flex items-center justify-center text-sm font-semibold border border-[var(--border)] transition-all"
-            style={{ backgroundColor: brand.background_color, color: brand.text_color, fontFamily: brand.font_family }}
-          >
-            <span style={{ color: brand.accent_color, marginRight: 6 }}>✦</span>
-            {brand.brand_name || 'Your Brand'} — Preview
-          </div>
-
-          {/* Brand name */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[var(--foreground)]">Brand / Company Name</label>
-            <input
-              type="text"
-              value={brand.brand_name}
-              onChange={(e) => setBrand((b) => ({ ...b, brand_name: e.target.value }))}
-              placeholder="e.g. Tekmadev"
-              className="w-full px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            />
-          </div>
-
-          {/* Brand Logo */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-[var(--foreground)]">Brand Logo</label>
-            <p className="text-xs text-[var(--muted)]">Automatically composited onto every generated carousel slide. PNG with transparent background works best.</p>
-            {brand.logo_url ? (
-              <div className="flex items-center gap-3 p-3 border border-[var(--border)] rounded-xl bg-[var(--surface)]">
-                <div className="w-16 h-16 rounded-lg border border-[var(--border)] bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
-                  <img src={brand.logo_url} alt="Brand logo" className="max-w-full max-h-full object-contain p-1" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-[var(--foreground)]">Logo uploaded</p>
-                  <p className="text-[11px] text-[var(--muted)] mt-0.5">Will appear on all carousel slides</p>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => logoInputRef.current?.click()}
-                    disabled={logoUploading}
-                    className="px-3 py-1.5 text-xs border border-[var(--border)] rounded-lg hover:bg-white transition-colors disabled:opacity-50"
-                  >
-                    Replace
-                  </button>
-                  <button
-                    onClick={handleLogoRemove}
-                    className="px-3 py-1.5 text-xs text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => logoInputRef.current?.click()}
-                disabled={logoUploading}
-                className="flex items-center gap-3 px-4 py-3 border-2 border-dashed border-[var(--border)] rounded-xl hover:border-[var(--primary)]/50 hover:bg-[var(--surface)] transition-colors text-left disabled:opacity-50"
-              >
-                <div className="w-10 h-10 rounded-lg bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center flex-shrink-0 text-lg">
-                  {logoUploading ? '⏳' : '🖼'}
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[var(--foreground)]">{logoUploading ? 'Uploading…' : 'Upload logo'}</p>
-                  <p className="text-[11px] text-[var(--muted)]">PNG, JPG, WEBP, SVG — max 2 MB</p>
-                </div>
-              </button>
-            )}
-            {logoError && <p className="text-xs text-red-600">{logoError}</p>}
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/svg+xml"
-              className="hidden"
-              onChange={handleLogoUpload}
-            />
-          </div>
-
-          {/* Colors grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {([
-              { key: 'primary_color',    label: 'Primary Color',    hint: 'Main brand color — buttons, key elements' },
-              { key: 'secondary_color',  label: 'Secondary Color',  hint: 'Supporting / contrast color' },
-              { key: 'accent_color',     label: 'Accent Color',     hint: 'Highlights, CTAs, decorative details' },
-              { key: 'background_color', label: 'Background Color', hint: 'Slide background' },
-              { key: 'text_color',       label: 'Text Color',       hint: 'Main body and headline text' },
-            ] as { key: keyof BrandSettings; label: string; hint: string }[]).map(({ key, label, hint }) => (
-              <div key={key} className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-[var(--foreground)]">{label}</label>
-                <p className="text-xs text-[var(--muted)]">{hint}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="relative flex-shrink-0">
-                    <input
-                      type="color"
-                      value={brand[key] as string}
-                      onChange={(e) => setBrand((b) => ({ ...b, [key]: e.target.value }))}
-                      className="w-10 h-10 rounded-lg border border-[var(--border)] cursor-pointer p-0.5 bg-white"
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    value={brand[key] as string}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      if (/^#[0-9a-fA-F]{0,6}$/.test(val)) {
-                        setBrand((b) => ({ ...b, [key]: val }))
-                      }
-                    }}
-                    placeholder="#000000"
-                    className="flex-1 px-3 py-2 border border-[var(--border)] rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                    maxLength={7}
-                  />
-                </div>
-              </div>
-            ))}
-
-            {/* Font picker */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-[var(--foreground)]">Font Family</label>
-              <p className="text-xs text-[var(--muted)]">Typography style for generated visuals</p>
-              <select
-                value={brand.font_family}
-                onChange={(e) => setBrand((b) => ({ ...b, font_family: e.target.value }))}
-                className="mt-1 w-full px-3 py-2.5 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] bg-white"
-              >
-                {FONT_OPTIONS.map((f) => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
+        {/* Brand Style — moved to /brand page (Brand Identity).
+            Pointer card stays here so users discovering settings know where it went. */}
+        <section className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl shrink-0">🎨</div>
+            <div>
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--muted)]">Brand Style</h2>
+              <p className="text-xs text-[var(--muted)] mt-1">
+                Logo, brand colors, and font for AI-generated visuals are now managed on the Brand Identity page — alongside your full brand brief.
+              </p>
             </div>
           </div>
-
-          {brandError && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{brandError}</p>
-          )}
-
-          <button
-            onClick={saveBrandSettings}
-            disabled={savingBrand}
-            className="self-start px-5 py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+          <Link
+            href="/brand"
+            className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] transition-colors shrink-0"
           >
-            {savingBrand ? 'Saving…' : brandSaved ? '✓ Saved' : 'Save Brand Style'}
-          </button>
+            Open Brand →
+          </Link>
         </section>
 
         {/* Carousel AI */}

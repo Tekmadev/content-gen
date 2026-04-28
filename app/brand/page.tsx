@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
 import BrandChat from '@/components/BrandChat'
 import BrandBriefDisplay from '@/components/BrandBriefDisplay'
+import BrandStyleSection from '@/components/BrandStyleSection'
 import type { BrandBrief, ChatMessage } from '@/lib/types'
 
 type PageState = 'loading' | 'chat' | 'generating' | 'ready' | 'error'
@@ -242,6 +243,13 @@ export default function BrandPage() {
             onReset={handleReset}
           />
         )}
+
+        {/* Brand Style — visual identity for AI-generated images.
+            Always visible (any state) so users can configure their style
+            before, during, or after the brand chat. Persists to brand_settings. */}
+        <div className="mt-8">
+          <BrandStyleSection />
+        </div>
       </div>
     </AppShell>
   )

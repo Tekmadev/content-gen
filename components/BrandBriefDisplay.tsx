@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { BrandBrief, AudienceSegment, BriefService } from '@/lib/types'
 
 interface Props {
@@ -300,89 +300,400 @@ export default function BrandBriefDisplay({ brief, onUpdate, onReset }: Props) {
             </div>
           </Section>
 
-          {/* Target Audiences */}
+          {/* Target Audiences — editable cards + add new */}
           <div className="md:col-span-2">
             <Section title="Target Audiences" icon="🎯">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {audiences.length ? audiences.map((a: AudienceSegment, i) => (
-                  <div key={i} className="border border-[var(--border)] rounded-xl p-4 space-y-2">
-                    <p className="font-semibold text-sm text-[var(--foreground)]">{a.name}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">{a.description}</p>
-                    {a.pain_points?.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-[var(--muted-foreground)] mb-1">Pain points</p>
-                        <ul className="space-y-0.5">
-                          {a.pain_points.map((p, j) => (
-                            <li key={j} className="text-xs text-[var(--foreground)] flex gap-1">
-                              <span className="text-red-400 mt-0.5">·</span>{p}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {a.goals?.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-[var(--muted-foreground)] mb-1">Goals</p>
-                        <ul className="space-y-0.5">
-                          {a.goals.map((g, j) => (
-                            <li key={j} className="text-xs text-[var(--foreground)] flex gap-1">
-                              <span className="text-green-400 mt-0.5">·</span>{g}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )) : (
-                  <p className="text-sm italic text-[var(--muted-foreground)] col-span-full">No audience segments defined</p>
-                )}
-              </div>
-            </Section>
-          </div>
-
-          {/* Services */}
-          <div className="md:col-span-2">
-            <Section title="Services & Offerings" icon="🛠️">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {services.length ? services.map((s: BriefService, i) => (
-                  <div key={i} className="border border-[var(--border)] rounded-xl p-4 space-y-2">
-                    <p className="font-semibold text-sm text-[var(--foreground)]">{s.name}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">{s.description}</p>
-                    {s.key_message && (
-                      <p className="text-xs text-[var(--accent)] italic">"{s.key_message}"</p>
-                    )}
-                    {s.outcome && (
-                      <p className="text-xs text-[var(--foreground)]">
-                        <span className="font-medium">Outcome:</span> {s.outcome}
-                      </p>
-                    )}
-                  </div>
-                )) : (
-                  <p className="text-sm italic text-[var(--muted-foreground)] col-span-full">No services defined</p>
-                )}
-              </div>
-            </Section>
-          </div>
-
-          {/* Reference Images */}
-          {referenceImages.length > 0 && (
-            <div className="md:col-span-2">
-              <Section title="Visual References" icon="🖼️">
-                <div className="flex flex-wrap gap-3">
-                  {referenceImages.map((url, i) => (
-                    <img
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {audiences.map((a, i) => (
+                    <AudienceCard
                       key={i}
-                      src={url}
-                      alt={`Reference ${i + 1}`}
-                      className="h-28 w-28 object-cover rounded-xl border border-[var(--border)]"
+                      audience={a}
+                      onUpdate={(next) => {
+                        const list = [...audiences]
+                        list[i] = next
+                        save({ audiences: list })
+                      }}
+                      onRemove={() => save({ audiences: audiences.filter((_, j) => j !== i) })}
                     />
                   ))}
                 </div>
-              </Section>
-            </div>
-          )}
+                {!audiences.length && (
+                  <p className="text-sm italic text-[var(--muted-foreground)]">No audience segments yet — add one below.</p>
+                )}
+                <button
+                  onClick={() => save({
+                    audiences: [
+                      ...audiences,
+                      { name: 'New audience', description: '', pain_points: [], goals: [] },
+                    ],
+                  })}
+                  className="text-xs font-medium text-[var(--accent)] hover:opacity-80 border border-dashed border-[var(--border)] hover:border-[var(--accent)] rounded-xl px-4 py-2 transition-colors"
+                >
+                  + Add audience segment
+                </button>
+              </div>
+            </Section>
+          </div>
+
+          {/* Services — editable cards + add new */}
+          <div className="md:col-span-2">
+            <Section title="Services & Offerings" icon="🛠️">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {services.map((s, i) => (
+                    <ServiceCard
+                      key={i}
+                      service={s}
+                      onUpdate={(next) => {
+                        const list = [...services]
+                        list[i] = next
+                        save({ services: list })
+                      }}
+                      onRemove={() => save({ services: services.filter((_, j) => j !== i) })}
+                    />
+                  ))}
+                </div>
+                {!services.length && (
+                  <p className="text-sm italic text-[var(--muted-foreground)]">No services yet — add one below.</p>
+                )}
+                <button
+                  onClick={() => save({
+                    services: [
+                      ...services,
+                      { name: 'New service', description: '', key_message: '', outcome: '' },
+                    ],
+                  })}
+                  className="text-xs font-medium text-[var(--accent)] hover:opacity-80 border border-dashed border-[var(--border)] hover:border-[var(--accent)] rounded-xl px-4 py-2 transition-colors"
+                >
+                  + Add service
+                </button>
+              </div>
+            </Section>
+          </div>
+
+          {/* Reference Images — always visible, with upload + remove */}
+          <div className="md:col-span-2">
+            <Section title="Visual References" icon="🖼️">
+              <ReferenceImagesEditor
+                images={referenceImages}
+                onChange={(images) => save({ reference_images: images })}
+              />
+            </Section>
+          </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Editable cards ─────────────────────────────────────────────────────────────
+
+function AudienceCard({
+  audience,
+  onUpdate,
+  onRemove,
+}: {
+  audience: AudienceSegment
+  onUpdate: (next: AudienceSegment) => void
+  onRemove: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<AudienceSegment>(audience)
+
+  if (editing) {
+    return (
+      <div className="border border-[var(--accent)] rounded-xl p-4 space-y-2 bg-[var(--surface)]">
+        <input
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          value={draft.name}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          placeholder="Audience name"
+        />
+        <textarea
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          rows={2}
+          value={draft.description}
+          onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+          placeholder="Description"
+        />
+        <textarea
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          rows={3}
+          value={(draft.pain_points ?? []).join('\n')}
+          onChange={(e) => setDraft({ ...draft, pain_points: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })}
+          placeholder="Pain points (one per line)"
+        />
+        <textarea
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          rows={3}
+          value={(draft.goals ?? []).join('\n')}
+          onChange={(e) => setDraft({ ...draft, goals: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })}
+          placeholder="Goals (one per line)"
+        />
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={() => { onUpdate(draft); setEditing(false) }}
+            className="text-xs bg-[var(--accent)] text-white px-3 py-1 rounded-lg hover:opacity-90"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => { setDraft(audience); setEditing(false) }}
+            className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onRemove}
+            className="ml-auto text-xs text-red-500 hover:text-red-600"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="group border border-[var(--border)] rounded-xl p-4 space-y-2 cursor-pointer hover:border-[var(--accent)] transition-colors"
+      onClick={() => { setDraft(audience); setEditing(true) }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-sm text-[var(--foreground)]">{audience.name || <span className="italic opacity-40">Unnamed</span>}</p>
+        <span className="text-xs text-[var(--accent)] opacity-0 group-hover:opacity-100 transition-opacity">Edit</span>
+      </div>
+      {audience.description && <p className="text-xs text-[var(--muted-foreground)]">{audience.description}</p>}
+      {audience.pain_points?.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-[var(--muted-foreground)] mb-1">Pain points</p>
+          <ul className="space-y-0.5">
+            {audience.pain_points.map((p, j) => (
+              <li key={j} className="text-xs text-[var(--foreground)] flex gap-1">
+                <span className="text-red-400 mt-0.5">·</span>{p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {audience.goals?.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-[var(--muted-foreground)] mb-1">Goals</p>
+          <ul className="space-y-0.5">
+            {audience.goals.map((g, j) => (
+              <li key={j} className="text-xs text-[var(--foreground)] flex gap-1">
+                <span className="text-green-400 mt-0.5">·</span>{g}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ServiceCard({
+  service,
+  onUpdate,
+  onRemove,
+}: {
+  service: BriefService
+  onUpdate: (next: BriefService) => void
+  onRemove: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<BriefService>(service)
+
+  if (editing) {
+    return (
+      <div className="border border-[var(--accent)] rounded-xl p-4 space-y-2 bg-[var(--surface)]">
+        <input
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          value={draft.name}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          placeholder="Service name"
+        />
+        <textarea
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          rows={2}
+          value={draft.description}
+          onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+          placeholder="Description"
+        />
+        <input
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs italic focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          value={draft.key_message}
+          onChange={(e) => setDraft({ ...draft, key_message: e.target.value })}
+          placeholder="Key message / tagline"
+        />
+        <textarea
+          className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          rows={2}
+          value={draft.outcome}
+          onChange={(e) => setDraft({ ...draft, outcome: e.target.value })}
+          placeholder="Outcome for the client"
+        />
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={() => { onUpdate(draft); setEditing(false) }}
+            className="text-xs bg-[var(--accent)] text-white px-3 py-1 rounded-lg hover:opacity-90"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => { setDraft(service); setEditing(false) }}
+            className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onRemove}
+            className="ml-auto text-xs text-red-500 hover:text-red-600"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="group border border-[var(--border)] rounded-xl p-4 space-y-2 cursor-pointer hover:border-[var(--accent)] transition-colors"
+      onClick={() => { setDraft(service); setEditing(true) }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-sm text-[var(--foreground)]">{service.name || <span className="italic opacity-40">Unnamed</span>}</p>
+        <span className="text-xs text-[var(--accent)] opacity-0 group-hover:opacity-100 transition-opacity">Edit</span>
+      </div>
+      {service.description && <p className="text-xs text-[var(--muted-foreground)]">{service.description}</p>}
+      {service.key_message && (
+        <p className="text-xs text-[var(--accent)] italic">&ldquo;{service.key_message}&rdquo;</p>
+      )}
+      {service.outcome && (
+        <p className="text-xs text-[var(--foreground)]">
+          <span className="font-medium">Outcome:</span> {service.outcome}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Reference images editor ───────────────────────────────────────────────────
+
+function ReferenceImagesEditor({
+  images,
+  onChange,
+}: {
+  images: string[]
+  onChange: (next: string[]) => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    setError('')
+
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']
+    const MAX = 10 * 1024 * 1024
+    const valid = files.filter((f) => {
+      if (f.type.startsWith('video/')) { setError(`"${f.name}" is a video — only images allowed.`); return false }
+      if (!ALLOWED.includes(f.type)) { setError(`"${f.name}" — only JPG, PNG, WebP, GIF, SVG allowed.`); return false }
+      if (f.size > MAX) { setError(`"${f.name}" is too large (max 10MB).`); return false }
+      return true
+    })
+    if (!valid.length) {
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
+    setUploading(true)
+    const uploaded: string[] = []
+    for (const file of valid) {
+      const fd = new FormData()
+      fd.append('file', file)
+      try {
+        const res = await fetch('/api/brand-brief/upload', { method: 'POST', body: fd })
+        if (res.ok) {
+          const { url } = await res.json()
+          uploaded.push(url)
+        } else {
+          const { error } = await res.json()
+          setError(error ?? 'Upload failed')
+        }
+      } catch {
+        setError('Upload failed')
+      }
+    }
+    setUploading(false)
+    if (fileRef.current) fileRef.current.value = ''
+    if (uploaded.length) onChange([...images, ...uploaded])
+  }
+
+  return (
+    <div className="space-y-3">
+      {images.length === 0 && (
+        <p className="text-sm italic text-[var(--muted-foreground)]">
+          No reference images yet. Add brand photos, competitor styles, mood boards, or color inspirations.
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        {images.map((url, i) => (
+          <div key={i} className="relative group">
+            <img
+              src={url}
+              alt={`Reference ${i + 1}`}
+              className="h-28 w-28 object-cover rounded-xl border border-[var(--border)]"
+            />
+            <button
+              onClick={() => onChange(images.filter((_, j) => j !== i))}
+              aria-label="Remove image"
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+
+        {/* Upload tile */}
+        <label
+          className="h-28 w-28 rounded-xl border-2 border-dashed border-[var(--border)] hover:border-[var(--accent)] flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors text-[var(--muted-foreground)] hover:text-[var(--accent)]"
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+            multiple
+            className="hidden"
+            onChange={handleUpload}
+            disabled={uploading}
+          />
+          {uploading ? (
+            <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+          ) : (
+            <>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="text-xs font-medium">Add image</span>
+            </>
+          )}
+        </label>
+      </div>
+
+      {error && <p className="text-xs text-red-500">{error}</p>}
+
+      <p className="text-xs text-[var(--muted-foreground)]">
+        Saved to Supabase Storage — JPG, PNG, WebP, GIF, SVG (max 10MB each). Hover to remove.
+      </p>
     </div>
   )
 }

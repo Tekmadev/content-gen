@@ -120,8 +120,25 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
       // ⚡ Autosave to DB so refresh restores the conversation
       autosave(newHistory, referenceImages)
 
-      // Check if the model signalled completion
-      if (fullResponse.includes('"action":"BRIEF_COMPLETE"')) {
+      // Detect completion — multiple patterns since the bot sometimes truncates
+      // mid-marker or paraphrases the closing line:
+      //  1. The exact BRIEF_COMPLETE JSON marker (preferred)
+      //  2. Phrases that signal the bot is wrapping up (fallback)
+      const lower = fullResponse.toLowerCase()
+      const hasMarker = fullResponse.includes('"action":"BRIEF_COMPLETE"') ||
+                        fullResponse.includes('BRIEF_COMPLETE')
+      const hasFinishPhrase =
+        lower.includes('have everything i need') ||
+        lower.includes('have everything we need') ||
+        lower.includes('moment to put it all together') ||
+        lower.includes('build your brand profile')
+
+      // Only auto-finish on a phrase if the user has answered enough questions —
+      // otherwise the bot might use these phrases mid-conversation.
+      const userMsgCount = history.filter((m) => m.role === 'user').length + 1
+      const shouldComplete = hasMarker || (hasFinishPhrase && userMsgCount >= 8)
+
+      if (shouldComplete) {
         const cleanResponse = fullResponse
           .replace(/```json[\s\S]*?```/g, '')
           .trim()

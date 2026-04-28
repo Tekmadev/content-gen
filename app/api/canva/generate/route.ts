@@ -59,7 +59,11 @@ export async function POST(request: Request) {
       aimStyleDescription = await analyzeAimImage(aimImageBase64, aimImageMime)
     }
 
-    const slides = await generateViralCarouselSlides(content, additionalInfo, aimStyleDescription, brandSettings)
+    const slides = await generateViralCarouselSlides(content, {
+      additionalInfo,
+      aimStyleDescription,
+      brandSettings,
+    })
 
     const designId = await canvaAutofill(token, canvaTemplateId, slides)
     const exportedUrls = await canvaExport(token, designId)
