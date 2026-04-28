@@ -436,7 +436,7 @@ function CarouselStudioContent() {
                     <span className="text-xs text-[var(--muted)]">Drag & drop or click to upload</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
                       className="hidden"
                       onChange={(e) => e.target.files?.[0] && handleAimImageUpload(e.target.files[0])}
                     />

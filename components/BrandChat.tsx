@@ -174,9 +174,37 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
     setUploading(true)
     setError('')
 
+    // Client-side guard — block videos and oversize files before sending.
+    // Server-side allowlist (lib/upload route) is the source of truth, this is just UX.
+    const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']
+    const MAX_BYTES = 10 * 1024 * 1024 // 10MB — must match server
+
+    const valid: File[] = []
+    for (const file of files) {
+      if (file.type.startsWith('video/')) {
+        setError(`"${file.name}" is a video — only images are allowed (JPG, PNG, WebP, GIF, SVG).`)
+        continue
+      }
+      if (!ALLOWED_MIME.includes(file.type)) {
+        setError(`"${file.name}" is not a supported image format. Use JPG, PNG, WebP, GIF, or SVG.`)
+        continue
+      }
+      if (file.size > MAX_BYTES) {
+        setError(`"${file.name}" is too large (max 10MB).`)
+        continue
+      }
+      valid.push(file)
+    }
+
+    if (!valid.length) {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
     // Upload to Supabase Storage (Content/brand-refs/{user_id}/...) — returns public URLs
     const uploaded: string[] = []
-    for (const file of files) {
+    for (const file of valid) {
       const fd = new FormData()
       fd.append('file', file)
       try {
@@ -323,7 +351,7 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
           multiple
           className="hidden"
           onChange={handleFileUpload}
