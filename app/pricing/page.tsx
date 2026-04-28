@@ -12,71 +12,106 @@ const PLANS = [
     name: 'Starter',
     price: '$19',
     period: 'CAD/month',
-    description: 'Perfect for solo creators and small businesses getting started with social media.',
+    description: 'Get one polished post out the door every day, on your favorite platform.',
     features: [
-      '60 credits per month',
-      'Post generation — 1 credit',
-      'Visual generation — 3 credits',
-      'Carousel generation — 8 credits',
-      'LinkedIn, Instagram & X publishing',
+      '120 credits per month',
+      '~30 posts/month (one per day)',
+      'Choose 1 platform — LinkedIn, Instagram, or X',
+      'AI brand voice from your chat-built brand brief',
+      'Visuals generation included',
+      'Carousel Studio (occasional use)',
       'Content extraction from YouTube, articles, PDFs',
-      'Brand style kit',
+      'Brand style kit (logo, colors, font)',
     ],
     cta: 'Get started',
     highlight: false,
   },
   {
+    key: 'creator',
+    name: 'Creator',
+    price: '$49',
+    period: 'CAD/month',
+    description: 'Stay consistent across all 3 platforms with daily posts and regular carousels.',
+    features: [
+      '350 credits per month',
+      'All 3 platforms — LinkedIn, Instagram, X',
+      'Carousel Studio with image-rich styles',
+      'Reference image library + AIM uploads',
+      'Custom carousel prompts',
+      'Brand voice profile (full)',
+      'Content extraction from YouTube, articles, PDFs',
+      'Email support (24h response)',
+    ],
+    cta: 'Get Creator',
+    highlight: true,
+  },
+  {
     key: 'pro',
     name: 'Pro',
-    price: '$50',
+    price: '$99',
     period: 'CAD/month',
-    description: 'For growing brands and marketers who publish consistently across platforms.',
+    description: 'For business owners and power users publishing daily across every platform.',
     features: [
-      '250 credits per month',
-      'Post generation — 1 credit',
-      'Visual generation — 3 credits',
-      'Carousel generation — 8 credits',
-      'LinkedIn, Instagram & X publishing',
-      'Content extraction from YouTube, articles, PDFs',
-      'Brand style kit',
-      'Priority support',
+      '800 credits per month',
+      'Everything in Creator',
+      'Up to 2 brand profiles (personal + business)',
+      'Priority generation queue',
+      'Unlimited reference images',
+      'Custom carousel templates',
+      'Priority support (8h response)',
     ],
     cta: 'Get Pro',
-    highlight: true,
+    highlight: false,
   },
   {
     key: 'agency',
     name: 'Agency',
-    price: '$120',
+    price: '$279',
     period: 'CAD/month',
-    description: 'For agencies and power users managing high-volume content production.',
+    description: 'For agencies managing multiple clients with team collaboration.',
     features: [
-      '1,000 credits per month',
-      'Post generation — 1 credit',
-      'Visual generation — 3 credits',
-      'Carousel generation — 8 credits',
-      'LinkedIn, Instagram & X publishing',
-      'Content extraction from YouTube, articles, PDFs',
-      'Brand style kit',
-      'Priority support',
+      '2,200 credits per month',
+      'Everything in Pro',
+      '5 brand profiles (manage multiple clients)',
+      '3 team seats',
+      'Dedicated success manager',
+      'Phone & Slack support (4h response)',
     ],
     cta: 'Get Agency',
     highlight: false,
   },
 ]
 
+const ADDONS = [
+  { name: 'Boost',  credits: 50,  price: '$19',  desc: 'Power through a busy week' },
+  { name: 'Pulse',  credits: 200, price: '$59',  desc: 'Cover a big launch month' },
+  { name: 'Surge',  credits: 500, price: '$129', desc: 'A heavy quarter, no upgrade' },
+]
+
 const FAQ = [
   {
-    q: 'What counts as a "post generation"?',
-    a: 'Each time you submit a URL or text and generate posts for all three platforms (LinkedIn, Instagram, X), that counts as one post generation.',
+    q: 'What is a credit?',
+    a: 'A credit is the unit we use to track usage. A post generation costs 1 credit, a single visual costs 3 credits, and a full carousel (4–10 slides) costs 8 credits. Your monthly credits refresh on the 1st of each month.',
+  },
+  {
+    q: 'Can I switch plans anytime?',
+    a: 'Yes — upgrade or downgrade from your billing page. Upgrades take effect immediately and are prorated. Downgrades apply at the start of your next billing cycle.',
+  },
+  {
+    q: 'What happens if I run out of credits?',
+    a: 'You can buy a top-up pack — 50, 200, or 500 extra credits — without changing your plan. Top-up credits roll over for 90 days. Or upgrade to the next tier for more monthly credits at a better per-credit rate.',
+  },
+  {
+    q: 'Why does Starter only support 1 platform?',
+    a: 'We tuned Starter for solo creators who want to stay consistent on their main channel. If you publish on multiple platforms, Creator is built for you.',
   },
   {
     q: 'Can I cancel anytime?',
-    a: 'Yes. You can cancel your subscription at any time from your billing portal. You\'ll keep access until the end of your billing period.',
+    a: 'Yes. Cancel from your billing portal. You\'ll keep access until the end of your current billing period.',
   },
   {
     q: 'Are usage limits reset monthly?',
-    a: 'Yes. All usage counters reset on the 1st of each calendar month.',
+    a: 'Yes. Subscription credits reset on the 1st of each calendar month. Top-up credits expire 90 days after purchase.',
   },
   {
     q: 'Do you offer refunds?',
@@ -131,7 +166,7 @@ export default function PricingPage() {
         </div>
 
         {/* Plan cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {PLANS.map((plan) => (
             <div
               key={plan.key}
@@ -200,17 +235,22 @@ export default function PricingPage() {
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {[
-                  { label: 'Credits per month',         values: ['60', '250', '1,000'] },
-                  { label: 'Post generation cost',      values: ['1 cr', '1 cr', '1 cr'] },
-                  { label: 'Visual generation cost',    values: ['3 cr', '3 cr', '3 cr'] },
-                  { label: 'Carousel generation cost',  values: ['8 cr', '8 cr', '8 cr'] },
-                  { label: 'LinkedIn publishing',       values: [true, true, true] },
-                  { label: 'Instagram publishing',      values: [true, true, true] },
-                  { label: 'X / Twitter publishing',    values: [true, true, true] },
-                  { label: 'YouTube content extraction',values: [true, true, true] },
-                  { label: 'Article / PDF extraction',  values: [true, true, true] },
-                  { label: 'Brand style kit',           values: [true, true, true] },
-                  { label: 'Priority support',          values: [false, true, true] },
+                  { label: 'Credits per month',          values: ['120', '350', '800', '2,200'] },
+                  { label: 'Platforms',                  values: ['1 of choice', 'All 3', 'All 3', 'All 3'] },
+                  { label: 'Brand profiles',             values: ['1', '1', '2', '5'] },
+                  { label: 'Team seats',                 values: ['1', '1', '1', '3'] },
+                  { label: 'Post generation cost',       values: ['1 cr', '1 cr', '1 cr', '1 cr'] },
+                  { label: 'Visual generation cost',     values: ['3 cr', '3 cr', '3 cr', '3 cr'] },
+                  { label: 'Carousel generation cost',   values: ['8 cr', '8 cr', '8 cr', '8 cr'] },
+                  { label: 'Carousel Studio',            values: [true, true, true, true] },
+                  { label: 'Image-rich carousel styles', values: [true, true, true, true] },
+                  { label: 'Reference image library',    values: ['3', '10', 'Unlimited', 'Unlimited'] },
+                  { label: 'YouTube + article + PDF extraction', values: [true, true, true, true] },
+                  { label: 'Brand style kit',            values: [true, true, true, true] },
+                  { label: 'Brand voice profile',        values: [true, true, true, true] },
+                  { label: 'Priority generation queue',  values: [false, false, true, true] },
+                  { label: 'Email support',              values: ['48h', '24h', '8h priority', '4h priority'] },
+                  { label: 'Dedicated success manager',  values: [false, false, false, true] },
                 ].map((row) => (
                   <tr key={row.label} className="bg-white even:bg-[var(--surface)]">
                     <td className="px-5 py-3 text-[var(--foreground)]">{row.label}</td>
@@ -230,6 +270,37 @@ export default function PricingPage() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Add-on credit packs */}
+        <div className="flex flex-col gap-6">
+          <div className="text-center flex flex-col gap-2">
+            <h2 className="text-2xl font-bold">Need more credits this month?</h2>
+            <p className="text-sm text-[var(--muted)] max-w-xl mx-auto">
+              Buy a top-up pack on top of any plan — no contract change, no commitment.
+              Top-up credits roll over for 90 days.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {ADDONS.map((pack) => (
+              <div
+                key={pack.name}
+                className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-white p-5"
+              >
+                <div className="flex items-baseline justify-between">
+                  <p className="font-bold text-lg">{pack.name}</p>
+                  <span className="text-xl font-bold text-[var(--primary)]">{pack.price}</span>
+                </div>
+                <p className="text-sm font-semibold text-[var(--foreground)]">
+                  +{pack.credits} credits
+                </p>
+                <p className="text-xs text-[var(--muted)] leading-relaxed">{pack.desc}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-[var(--muted)] text-center">
+            Top-up packs are billed once. Heavy use? Upgrading your plan is usually the better deal.
+          </p>
         </div>
 
         {/* FAQ */}

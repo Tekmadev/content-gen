@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 
 interface Profile {
-  subscription_plan: 'starter' | 'pro' | 'agency' | null
+  subscription_plan: 'starter' | 'creator' | 'pro' | 'agency' | null
   subscription_status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | null
   subscription_period_end: string | null
   credits_used: number
@@ -24,31 +24,69 @@ const PLANS = [
     name: 'Starter',
     price: '$19',
     currency: 'CAD/mo',
-    credits: 60,
-    features: ['60 credits / month', 'Post generation — 1 credit', 'Visual generation — 3 credits', 'Carousel generation — 8 credits', 'All platforms'],
+    credits: 120,
+    features: [
+      '120 credits / month',
+      '1 platform of choice',
+      'Brand voice + style kit',
+      'Carousel Studio (occasional)',
+    ],
     highlight: false,
+  },
+  {
+    key: 'creator',
+    name: 'Creator',
+    price: '$49',
+    currency: 'CAD/mo',
+    credits: 350,
+    features: [
+      '350 credits / month',
+      'All 3 platforms',
+      'Carousel Studio (full)',
+      'Reference library (10)',
+      'Email support (24h)',
+    ],
+    highlight: true,
   },
   {
     key: 'pro',
     name: 'Pro',
-    price: '$50',
+    price: '$99',
     currency: 'CAD/mo',
-    credits: 250,
-    features: ['250 credits / month', 'Post generation — 1 credit', 'Visual generation — 3 credits', 'Carousel generation — 8 credits', 'All platforms', 'Priority support'],
-    highlight: true,
+    credits: 800,
+    features: [
+      '800 credits / month',
+      'Everything in Creator',
+      '2 brand profiles',
+      'Priority queue',
+      'Priority support (8h)',
+    ],
+    highlight: false,
   },
   {
     key: 'agency',
     name: 'Agency',
-    price: '$120',
+    price: '$279',
     currency: 'CAD/mo',
-    credits: 1000,
-    features: ['1,000 credits / month', 'Post generation — 1 credit', 'Visual generation — 3 credits', 'Carousel generation — 8 credits', 'All platforms', 'Priority support'],
+    credits: 2200,
+    features: [
+      '2,200 credits / month',
+      '5 brand profiles',
+      '3 team seats',
+      'Dedicated success manager',
+      'Phone + Slack (4h)',
+    ],
     highlight: false,
   },
 ]
 
-const PLAN_LABELS: Record<string, string> = { starter: 'Starter', pro: 'Pro', agency: 'Agency' }
+const ADDONS = [
+  { key: 'boost',  name: 'Boost',  credits: 50,  price: '$19' },
+  { key: 'pulse',  name: 'Pulse',  credits: 200, price: '$59' },
+  { key: 'surge',  name: 'Surge',  credits: 500, price: '$129' },
+]
+
+const PLAN_LABELS: Record<string, string> = { starter: 'Starter', creator: 'Creator', pro: 'Pro', agency: 'Agency' }
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   active:     { label: 'Active',      color: 'text-green-700 bg-green-50 border-green-200' },
   trialing:   { label: 'Trial',       color: 'text-blue-700 bg-blue-50 border-blue-200' },
@@ -57,7 +95,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   incomplete: { label: 'Incomplete',  color: 'text-gray-700 bg-gray-50 border-gray-200' },
 }
 
-const PLAN_CREDITS: Record<string, number> = { starter: 60, pro: 250, agency: 1000 }
+const PLAN_CREDITS: Record<string, number> = { starter: 120, creator: 350, pro: 800, agency: 2200 }
 
 function CreditBar({ used, total }: { used: number; total: number }) {
   const pct = Math.min(100, Math.round((used / total) * 100))
@@ -159,11 +197,11 @@ function BillingContent() {
       ).toLocaleDateString('en-CA', { month: 'long', day: 'numeric' })
     : null
 
-  const planOrder = ['starter', 'pro', 'agency']
+  const planOrder = ['starter', 'creator', 'pro', 'agency']
 
   return (
     <AppShell user={null}>
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
 
         <div>
           <h1 className="text-xl font-semibold">Billing & Plan</h1>
@@ -261,8 +299,46 @@ function BillingContent() {
               </div>
             )}
 
+            {/* Add-on credit packs — visible only when actively subscribed */}
+            {hasActiveSub && (
+              <section className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex flex-col gap-4">
+                <div>
+                  <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--muted)]">
+                    Need more credits?
+                  </h2>
+                  <p className="text-xs text-[var(--muted)] mt-1">
+                    Top up any time without changing your plan. Top-up credits roll over for 90 days.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {ADDONS.map((pack) => (
+                    <div
+                      key={pack.key}
+                      className="border border-[var(--border)] rounded-xl p-4 flex flex-col gap-2 hover:border-[var(--primary)]/40 transition-colors"
+                    >
+                      <div className="flex items-baseline justify-between">
+                        <p className="font-bold text-[var(--foreground)]">{pack.name}</p>
+                        <span className="text-lg font-bold text-[var(--primary)]">{pack.price}</span>
+                      </div>
+                      <p className="text-sm text-[var(--foreground)]">+{pack.credits} credits</p>
+                      <button
+                        disabled
+                        className="mt-1 w-full py-2 rounded-lg text-xs font-semibold bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)] cursor-not-allowed"
+                        title="Coming soon"
+                      >
+                        Coming soon
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-[var(--muted)]">
+                  Heavy use every month? Upgrading your plan is usually a better deal per credit.
+                </p>
+              </section>
+            )}
+
             {/* Plan cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {PLANS.map((plan) => {
                 const isCurrent = currentPlan === plan.key && hasActiveSub
                 const isLoading = checkoutLoading === plan.key

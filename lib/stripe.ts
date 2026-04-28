@@ -15,20 +15,26 @@ export const PLANS: Record<string, {
   starter: {
     name: 'Starter',
     priceId: process.env.STRIPE_PRICE_STARTER ?? '',
-    price: 1900,
-    credits: 60,
+    price: 1900,    // $19 CAD
+    credits: 120,
+  },
+  creator: {
+    name: 'Creator',
+    priceId: process.env.STRIPE_PRICE_CREATOR ?? '',
+    price: 4900,    // $49 CAD
+    credits: 350,
   },
   pro: {
     name: 'Pro',
     priceId: process.env.STRIPE_PRICE_PRO ?? '',
-    price: 5000,
-    credits: 250,
+    price: 9900,    // $99 CAD
+    credits: 800,
   },
   agency: {
     name: 'Agency',
     priceId: process.env.STRIPE_PRICE_AGENCY ?? '',
-    price: 12000,
-    credits: 1000,
+    price: 27900,   // $279 CAD
+    credits: 2200,
   },
 }
 

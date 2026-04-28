@@ -8,7 +8,7 @@ export interface UserProfile {
   onboarding_step: string
   blotato_api_key: string | null
   stripe_customer_id: string | null
-  subscription_plan: 'starter' | 'pro' | 'agency' | null
+  subscription_plan: 'starter' | 'creator' | 'pro' | 'agency' | null
   subscription_status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | null
   subscription_period_end: string | null
   credits_used: number
@@ -28,7 +28,7 @@ export interface UserProfile {
  * Live values come from `platform_config` table via getPlatformConfig().
  * Never reference these directly in business logic — use getPlatformConfig() instead.
  */
-const FALLBACK_PLAN_CREDITS: Record<string, number> = { starter: 40, pro: 150, agency: 500 }
+const FALLBACK_PLAN_CREDITS: Record<string, number> = { starter: 120, creator: 350, pro: 800, agency: 2200 }
 const FALLBACK_CREDIT_COSTS = { post_gen: 1, visual: 3, carousel: 8 }
 
 /**

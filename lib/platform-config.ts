@@ -57,6 +57,7 @@ export interface CreditCosts {
 /** Monthly credit allowance per subscription plan. */
 export interface PlanCredits {
   starter: number
+  creator: number
   pro:     number
   agency:  number
 }
@@ -82,10 +83,13 @@ export interface PlatformConfig {
 
 const DEFAULT_CONFIG: PlatformConfig = {
   models: {
-    // ── Claude text models (updated: claude-opus-4-7, April 2026) ──────────
-    post_linkedin:    'claude-opus-4-7',
-    post_instagram:   'claude-opus-4-7',
-    post_x:           'claude-opus-4-7',
+    // ── Claude text models ─────────────────────────────────────────────────
+    // Sonnet for high-volume social posts (5x cheaper than Opus, near-identical
+    // quality for short-form content). Opus reserved for carousel slides + brand
+    // work where viral-grade copywriting and synthesis quality matter.
+    post_linkedin:    'claude-sonnet-4-6',
+    post_instagram:   'claude-sonnet-4-6',
+    post_x:           'claude-sonnet-4-6',
     carousel_slides:  'claude-opus-4-7',
     carousel_caption: 'claude-opus-4-7',
     brand_generate:   'claude-opus-4-7',
@@ -102,9 +106,10 @@ const DEFAULT_CONFIG: PlatformConfig = {
     carousel: 8,
   },
   plan_credits: {
-    starter: 40,
-    pro:     150,
-    agency:  500,
+    starter: 120,    // ~1 post/day, 1 platform, occasional carousel
+    creator: 350,    // 3 platforms daily + regular carousels (Most Popular)
+    pro:     800,    // heavy publishers, business owners
+    agency:  2200,   // multi-brand agencies
   },
   api_cost_estimates: {
     // Claude Opus 4.7 — April 2026 pricing

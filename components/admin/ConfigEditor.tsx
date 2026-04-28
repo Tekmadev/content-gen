@@ -87,9 +87,10 @@ const CREDIT_COST_FIELDS: Record<keyof PlatformConfig['credit_costs'], { label: 
 }
 
 const PLAN_CREDIT_FIELDS: Record<keyof PlatformConfig['plan_credits'], { label: string; hint: string }> = {
-  starter: { label: 'Starter plan', hint: 'Monthly credit allowance for Starter subscribers' },
-  pro:     { label: 'Pro plan',     hint: 'Monthly credit allowance for Pro subscribers' },
-  agency:  { label: 'Agency plan',  hint: 'Monthly credit allowance for Agency subscribers' },
+  starter: { label: 'Starter plan', hint: 'Monthly credit allowance for Starter subscribers ($19 CAD)' },
+  creator: { label: 'Creator plan', hint: 'Monthly credit allowance for Creator subscribers ($49 CAD)' },
+  pro:     { label: 'Pro plan',     hint: 'Monthly credit allowance for Pro subscribers ($99 CAD)' },
+  agency:  { label: 'Agency plan',  hint: 'Monthly credit allowance for Agency subscribers ($279 CAD)' },
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
