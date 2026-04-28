@@ -1,5 +1,6 @@
 // Server-side helper — only use in API routes
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getPlatformConfig } from '@/lib/platform-config'
 
 export interface UserProfile {
   user_id: string
@@ -22,21 +23,21 @@ export interface UserProfile {
   is_admin: boolean
 }
 
-// Monthly credits per plan
-export const PLAN_CREDITS: Record<string, number> = {
-  starter: 60,
-  pro:     250,
-  agency:  1000,
-}
+/**
+ * Static fallback values — used only when platform config is unavailable.
+ * Live values come from `platform_config` table via getPlatformConfig().
+ * Never reference these directly in business logic — use getPlatformConfig() instead.
+ */
+const FALLBACK_PLAN_CREDITS: Record<string, number> = { starter: 40, pro: 150, agency: 500 }
+const FALLBACK_CREDIT_COSTS = { post_gen: 1, visual: 3, carousel: 8 }
 
-// Credits consumed per action type
-export const CREDIT_COSTS = {
-  post_gen:  1,
-  visual:    3,
-  carousel:  8,
-} as const
+/**
+ * Kept for backward compatibility (e.g., billing page credit-cost display).
+ * Prefer calling getPlatformConfig().credit_costs for live values.
+ */
+export const CREDIT_COSTS = FALLBACK_CREDIT_COSTS
 
-export type CreditAction = keyof typeof CREDIT_COSTS
+export type CreditAction = keyof typeof FALLBACK_CREDIT_COSTS
 
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const admin = createAdminClient()
@@ -80,9 +81,12 @@ export async function checkAndDeductCredits(
   if (!hasActiveSubscription(profile)) return 'No active subscription. Please choose a plan to continue.'
 
   const plan = profile.subscription_plan
-  if (!plan || !PLAN_CREDITS[plan]) return 'No active plan found.'
+  if (!plan) return 'No active plan found.'
 
-  const monthlyCredits = PLAN_CREDITS[plan]
+  // Read live plan credits from config (5-min cached); fall back to static values
+  const { plan_credits } = await getPlatformConfig()
+  const monthlyCredits = plan_credits[plan] ?? FALLBACK_PLAN_CREDITS[plan]
+  if (!monthlyCredits) return 'No active plan found.'
   const now = new Date()
   const resetAt = new Date(profile.credits_reset_at)
   const needsReset =

@@ -1,8 +1,12 @@
-// Nano Banana — Google Gemini Image Generation Client
-// Uses gemini-2.5-flash-image (Nano Banana) via the Gemini REST API
+/**
+ * Nano Banana — Google Gemini Image Generation Client
+ *
+ * The image generation model is read from platform_config at runtime,
+ * so it can be swapped without a deploy. Default: gemini-2.5-flash-image.
+ */
+import { getPlatformConfig } from '@/lib/platform-config'
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
-const MODEL = 'gemini-2.5-flash-image'
 
 function getHeaders() {
   const key = process.env.GEMINI_API_KEY
@@ -28,7 +32,9 @@ export async function generateImage(
   prompt: string,
   aspectRatio: AspectRatio = '1:1'
 ): Promise<GeminiImageResult> {
-  const res = await fetch(`${GEMINI_BASE}/${MODEL}:generateContent`, {
+  const { models } = await getPlatformConfig()
+  const model = models.image_generation
+  const res = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({

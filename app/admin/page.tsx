@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
+import ConfigEditor from '@/components/admin/ConfigEditor'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -321,7 +322,7 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'feedback'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'feedback' | 'config'>('overview')
   const [feedback, setFeedback] = useState<FeedbackEntry[]>([])
   const [feedbackSearch, setFeedbackSearch] = useState('')
   const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null)
@@ -418,6 +419,7 @@ export default function AdminPage() {
               { key: 'overview',  label: 'Overview' },
               { key: 'users',     label: `Users (${users.length})` },
               { key: 'feedback',  label: `Feedback (${feedback.length})` },
+              { key: 'config',    label: '⚙️ Config' },
             ] as const).map(tab => (
               <button
                 key={tab.key}
@@ -765,6 +767,20 @@ export default function AdminPage() {
             )}
           </>
         )}
+
+        {/* ── Config tab — fully self-contained, no shared state ── */}
+        {activeTab === 'config' && (
+          <div className="max-w-3xl">
+            <div className="mb-6">
+              <h2 className="text-lg font-bold text-[var(--foreground)]">Platform Configuration</h2>
+              <p className="text-sm text-[var(--muted-foreground)] mt-1">
+                Changes take effect within 5 minutes (server cache TTL). No deploy needed.
+              </p>
+            </div>
+            <ConfigEditor />
+          </div>
+        )}
+
       </div>
     </AppShell>
   )

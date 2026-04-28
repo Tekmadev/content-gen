@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { getPlatformConfig } from '@/lib/platform-config'
 import type { ViralSlide, BrandSettings } from './types'
 
 function getClient() {
@@ -60,12 +61,13 @@ STRUCTURE (adapt for single post, not literal carousel slides)
 
 export async function generateLinkedInPost(extractedContent: string, brandBriefContext?: string | null): Promise<string> {
   const client = getClient()
+  const { models } = await getPlatformConfig()
   const voiceSection = brandBriefContext
     ? `The following is the brand identity of the business you are writing for. Write in their voice, for their audience, aligned with their content pillars and personality:\n\n${brandBriefContext}\n\nALSO follow these universal content quality rules:\n${BRAND_VOICE}`
     : BRAND_VOICE
 
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: models.post_linkedin,
     max_tokens: 1024,
     messages: [
       {
@@ -96,12 +98,13 @@ Write the LinkedIn post now. Output only the post text, nothing else.`,
 
 export async function generateInstagramPost(extractedContent: string, brandBriefContext?: string | null): Promise<string> {
   const client = getClient()
+  const { models } = await getPlatformConfig()
   const voiceSection = brandBriefContext
     ? `The following is the brand identity of the business you are writing for. Write in their voice, for their audience, aligned with their content pillars and personality:\n\n${brandBriefContext}\n\nALSO follow these universal content quality rules:\n${BRAND_VOICE}`
     : BRAND_VOICE
 
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: models.post_instagram,
     max_tokens: 600,
     messages: [
       {
@@ -140,12 +143,13 @@ Write the Instagram caption now. No hashtags. Output only the caption text, noth
 
 export async function generateXPost(extractedContent: string, brandBriefContext?: string | null): Promise<string> {
   const client = getClient()
+  const { models } = await getPlatformConfig()
   const voiceSection = brandBriefContext
     ? `The following is the brand identity of the business you are writing for. Write in their voice, for their audience, aligned with their content pillars and personality:\n\n${brandBriefContext}\n\nALSO follow these universal content quality rules:\n${BRAND_VOICE}`
     : BRAND_VOICE
 
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: models.post_x,
     max_tokens: 256,
     messages: [
       {
@@ -228,6 +232,7 @@ export async function generateViralCarouselSlides(
   brandBriefContext?: string | null
 ): Promise<ViralSlide[]> {
   const client = getClient()
+  const { models } = await getPlatformConfig()
 
   const brandContext = brandBriefContext
     ? `\nBRAND IDENTITY — write every slide in this brand's voice, for their audience:\n${brandBriefContext}`
@@ -244,7 +249,7 @@ export async function generateViralCarouselSlides(
     : ''
 
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: models.carousel_slides,
     max_tokens: 2500,
     messages: [{
       role: 'user',
@@ -311,11 +316,12 @@ export async function generateCarouselCaption(
   slides: { number: number; label?: string; text: string }[]
 ): Promise<string> {
   const client = getClient()
+  const { models } = await getPlatformConfig()
 
   const slidesSummary = slides.map((s) => `Slide ${s.number} (${s.label}): ${s.text}`).join('\n')
 
   const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+    model: models.carousel_caption,
     max_tokens: 400,
     messages: [{
       role: 'user',
