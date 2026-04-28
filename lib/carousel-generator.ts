@@ -282,6 +282,7 @@ Rules:
 
 export interface ViralCarouselConfig {
   content: string
+  numSlides?: number         // 4–10, defaults to 10
   additionalInfo?: string
   aimImageBase64?: string    // reference image uploaded by user
   aimImageMime?: string      // mime type of the AIM image
@@ -343,10 +344,14 @@ function buildViralImagePrompt(
   ratio: AspectRatio,
   aimStyleDescription?: string,
   brandSettings?: BrandSettings,
-  style?: CarouselStyle
+  style?: CarouselStyle,
+  topicContext?: string
 ): string {
   const label = formatLabel(platform, ratio)
   const brandSection = brandSettings ? buildBrandSection(brandSettings) : ''
+  const styleDef = style ? CAROUSEL_STYLES[style] : undefined
+  const isImageRich = styleDef?.kind === 'image-rich'
+
   const styleDesc = style
     ? (style === 'brand_colors' && brandSettings
         ? `Background: ${brandSettings.background_color}. Text: ${brandSettings.text_color}. Accent elements in ${brandSettings.accent_color}. Primary highlights in ${brandSettings.primary_color}. Clean minimal layout.`
@@ -357,10 +362,16 @@ function buildViralImagePrompt(
     : ''
   const bodyText = slide.body?.trim()
 
+  // For image-rich styles, inject topic context so the background imagery
+  // visually represents what the carousel is about (not just abstract decoration).
+  const topicSection = isImageRich && topicContext
+    ? `\nTOPIC CONTEXT — the carousel is about:\n"${topicContext.slice(0, 280)}"\nThe background imagery MUST visually reinforce this topic. Choose subjects, scenes, or symbolic visuals directly relevant to it.\n`
+    : ''
+
   return `Create a professional Instagram carousel slide for a ${label}.
 
 ${styleDesc ? `BASE STYLE:\n${styleDesc}` : ''}
-${brandSection}${aimSection}
+${topicSection}${brandSection}${aimSection}
 
 TYPOGRAPHIC LAYOUT — follow this hierarchy EXACTLY:
 1. HEADLINE (dominant element): Large, bold, heavy-weight typography. Left-aligned or centered. 2–4 lines max.
@@ -376,6 +387,7 @@ LAYOUT RULES:
 - DO NOT render any logos, icons, monograms, symbols, or brand marks anywhere — keep all corners empty
 - Negative space is intentional — do not fill every inch
 - No watermarks, no decorative borders on the outer edge
+- ${isImageRich ? 'Background imagery must serve the topic, not distract from the text — text remains the dominant element with a subtle dark gradient overlay if needed for legibility' : 'Pure infographic — no photographic background, just the styled background described above'}
 - High production quality for professional social media
 
 Generate the image now.`
@@ -392,10 +404,17 @@ Generate the image now.`
 export async function generateViralCarousel(config: ViralCarouselConfig): Promise<GeneratedViralSlide[]> {
   const platform: CarouselPlatform = 'instagram_carousel'
   const ratio: AspectRatio = config.aspectRatio ?? '3:4'
-  const style = config.style ?? 'dark_statement'
+  const style = config.style ?? 'modern'
   const backend = config.imageGenerator ?? 'gemini'
+  const numSlides = Math.min(Math.max(4, config.numSlides ?? 10), 10)
 
-  console.log('[carousel-generator] backend=%s style=%s ratio=%s', backend, style, ratio)
+  // Claude SVG can't render photographic backgrounds — force an infographic
+  // style if the user picked an image-rich one for SVG mode.
+  const styleDef = CAROUSEL_STYLES[style]
+  const effectiveStyle: CarouselStyle =
+    backend === 'claude_svg' && styleDef.kind === 'image-rich' ? 'dark_statement' : style
+
+  console.log('[carousel-generator] backend=%s style=%s ratio=%s slides=%d', backend, effectiveStyle, ratio, numSlides)
 
   // Step 1: Analyze AIM reference image if provided (all backends benefit from this)
   let aimStyleDescription: string | undefined
@@ -403,28 +422,32 @@ export async function generateViralCarousel(config: ViralCarouselConfig): Promis
     aimStyleDescription = await analyzeAimImage(config.aimImageBase64, config.aimImageMime)
   }
 
-  // Step 2: Generate 10 viral slide texts via Claude
-  const slides = await generateViralCarouselSlides(
-    config.content,
-    config.additionalInfo,
+  // Step 2: Generate N viral slide texts via Claude
+  const slides = await generateViralCarouselSlides(config.content, {
+    numSlides,
+    additionalInfo: config.additionalInfo,
     aimStyleDescription,
-    config.brandSettings,
-    config.brandBriefContext
-  )
+    brandSettings: config.brandSettings,
+    brandBriefContext: config.brandBriefContext,
+  })
+
+  // The first ~280 chars of source content gives Gemini/OpenAI the topic
+  // context they need to produce relevant background imagery for image-rich styles.
+  const topicContext = config.content.slice(0, 280)
 
   // Step 3: Render images — route to the selected backend
   let generated: GeneratedViralSlide[]
 
   if (backend === 'claude_svg') {
     // ── Claude SVG: code-based, pixel-perfect, brand-accurate ────────────
-    const svgSlides = await generateViralCarouselSVG(slides, ratio, style, config.brandSettings)
+    const svgSlides = await generateViralCarouselSVG(slides, ratio, effectiveStyle, config.brandSettings)
     generated = svgSlides as GeneratedViralSlide[]
 
   } else if (backend === 'openai') {
-    // ── OpenAI DALL-E 3: vivid, photorealistic ────────────────────────────
+    // ── OpenAI DALL-E / gpt-image: vivid, photorealistic ─────────────────
     generated = await Promise.all(
       slides.map(async (slide) => {
-        const prompt = buildViralImagePrompt(slide, slides.length, platform, ratio, aimStyleDescription, config.brandSettings, style)
+        const prompt = buildViralImagePrompt(slide, slides.length, platform, ratio, aimStyleDescription, config.brandSettings, effectiveStyle, topicContext)
         const imageData = await generateImageWithOpenAI(prompt, ratio)
         return { ...slide, base64: imageData.data, mimeType: imageData.mimeType }
       })
@@ -434,7 +457,7 @@ export async function generateViralCarousel(config: ViralCarouselConfig): Promis
     // ── Gemini (default): AI image generation ─────────────────────────────
     generated = await Promise.all(
       slides.map(async (slide) => {
-        const prompt = buildViralImagePrompt(slide, slides.length, platform, ratio, aimStyleDescription, config.brandSettings, style)
+        const prompt = buildViralImagePrompt(slide, slides.length, platform, ratio, aimStyleDescription, config.brandSettings, effectiveStyle, topicContext)
         const imageData = await generateImage(prompt, ratio)
         return { ...slide, base64: imageData.data, mimeType: imageData.mimeType }
       })

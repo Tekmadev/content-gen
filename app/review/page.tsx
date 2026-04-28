@@ -930,12 +930,20 @@ export default function ReviewPage() {
 
 function StyleDot({ styleKey }: { styleKey: CarouselStyle }) {
   const dots: Record<CarouselStyle, string> = {
+    // Infographic
     white_card:      'bg-white border border-gray-300',
     dark_statement:  'bg-[#111]',
+    brand_colors:    'bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)]',
+    // Image-rich (new)
+    modern:          'bg-gradient-to-br from-slate-300 to-slate-600',
+    minimal:         'bg-stone-100 border border-stone-300',
+    bold:            'bg-gradient-to-br from-red-700 to-orange-600',
+    futuristic:      'bg-gradient-to-br from-indigo-600 to-fuchsia-500',
+    playful:         'bg-gradient-to-br from-pink-300 via-amber-200 to-emerald-300',
+    // Legacy
     gradient_bold:   'bg-gradient-to-br from-blue-600 to-purple-600',
     cinematic:       'bg-gradient-to-br from-gray-600 to-gray-900',
     branded_minimal: 'bg-orange-500',
-    brand_colors:    'bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)]',
   }
   return <span className={`w-3 h-3 rounded-full flex-shrink-0 ${dots[styleKey]}`} />
 }

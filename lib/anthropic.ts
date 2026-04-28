@@ -188,51 +188,128 @@ export async function generateAllPosts(extractedContent: string, brandBriefConte
 
 // ── Viral Carousel Studio ──────────────────────────────────────────────────
 
-const VIRAL_CAROUSEL_STRUCTURE = `
-CAROUSEL STRUCTURE (exactly 10 slides):
-Slide 1 – HOOK (Pattern Interrupt): Bold, controversial, or curiosity-driven statement.
-  - Make the reader feel: "Wait… what?"
-  - Use tension, surprise, or a strong claim
-  - 5–10 words max
+/**
+ * Build the slide structure prompt dynamically based on slide count (4–10).
+ * Hook + Pain + CTA are always present. Value scales with slide count;
+ * Rehook / AHA / Takeaway are added back in as count grows.
+ */
+type ViralSlideType = 'hook' | 'rehook' | 'pain' | 'value' | 'turning_point' | 'takeaway' | 'cta'
 
-Slide 2 – REHOOK (Open Loop): Add more intrigue without giving the answer.
-  - Tease the outcome
-  - Build curiosity gap
-  - Make them NEED the next slide
+interface SlidePlanItem {
+  number: number
+  type: ViralSlideType
+  label: string
+  description: string
+}
 
-Slide 3 – RELATABLE PAIN / STORY START: Start a short story or relatable situation.
-  - "Most people think…" OR "I used to…" OR "Everyone does this wrong…"
+function planViralSlides(numSlides: number): SlidePlanItem[] {
+  const n = Math.min(Math.max(4, numSlides), 10)
+  const plan: Omit<SlidePlanItem, 'number'>[] = []
 
-Slides 4–7 – VALUE (Story + Insights): Deliver main content through narrative flow.
-  - Break expectations
-  - Reveal insights step-by-step
-  - Each slide = 1 key idea
-  - Mix storytelling + actionable value
+  // Always: HOOK
+  plan.push({
+    type: 'hook',
+    label: 'HOOK',
+    description: 'Pattern interrupt. Bold, controversial, curiosity-driven statement that makes the reader feel "Wait… what?". 5–10 words.',
+  })
 
-Slide 8 – TURNING POINT (AHA MOMENT): Reveal the key insight or shift in perspective.
-  - Make it feel like a realization
-  - This is the "save-worthy" moment
+  // 5+: REHOOK (open loop, builds curiosity)
+  if (n >= 5) {
+    plan.push({
+      type: 'rehook',
+      label: 'REHOOK',
+      description: 'Open loop. Add intrigue without giving the answer. Tease the outcome. Make them NEED the next slide.',
+    })
+  }
 
-Slide 9 – ACTIONABLE TAKEAWAY: Give clear, practical steps or advice.
-  - Make it easy to apply immediately
+  // Always: PAIN (relatable starting point)
+  plan.push({
+    type: 'pain',
+    label: 'RELATABLE PAIN',
+    description: 'Short relatable situation or story start. "Most people think…" OR "I used to…" OR "Everyone does this wrong…".',
+  })
 
-Slide 10 – CTA (Engagement Trigger): Use a strong call-to-action.
-  - "Comment 'X' and I'll send it" / "Follow for more" / "Save this before it disappears"
-`
+  // VALUE slides scale with size: 4→1, 5→1, 6→1, 7→2, 8→2, 9→3, 10→4
+  const valueCount = n <= 6 ? 1 : n === 7 ? 2 : n === 8 ? 2 : n === 9 ? 3 : 4
+  for (let i = 1; i <= valueCount; i++) {
+    plan.push({
+      type: 'value',
+      label: valueCount > 1 ? `VALUE ${i}` : 'VALUE',
+      description: `One key insight. Break expectations, reveal step-by-step. Mix storytelling and actionable value.`,
+    })
+  }
+
+  // 6+: AHA MOMENT (turning point)
+  if (n >= 6) {
+    plan.push({
+      type: 'turning_point',
+      label: 'AHA MOMENT',
+      description: 'The save-worthy realization. Reveal the key shift in perspective. Make it feel like a moment of clarity.',
+    })
+  }
+
+  // 8+: TAKEAWAY (clear actionable steps)
+  if (n >= 8) {
+    plan.push({
+      type: 'takeaway',
+      label: 'TAKEAWAY',
+      description: 'Clear, practical steps the reader can apply immediately.',
+    })
+  }
+
+  // Always: CTA
+  plan.push({
+    type: 'cta',
+    label: 'CTA',
+    description: 'Engagement trigger. Strong direct call to action — "Save this", "Send to someone who needs it", "Follow for more".',
+  })
+
+  return plan.map((p, i) => ({ ...p, number: i + 1 }))
+}
+
+function buildViralStructurePrompt(plan: SlidePlanItem[]): string {
+  const lines = [`CAROUSEL STRUCTURE (exactly ${plan.length} slides):`]
+  for (const item of plan) {
+    lines.push(`Slide ${item.number} – ${item.label}: ${item.description}`)
+  }
+  return lines.join('\n\n')
+}
+
+function buildViralOutputExample(plan: SlidePlanItem[]): string {
+  return '[\n' + plan.map((p) =>
+    `  {"number": ${p.number}, "type": "${p.type}", "label": "${p.label}", "text": "Bold headline here.", "body": "Supporting sentence."}`
+  ).join(',\n') + '\n]'
+}
 
 /**
- * Generates 10 viral carousel slides using the user's proven carousel structure.
- * Optionally uses AIM image style description and additional context.
+ * Generates N viral carousel slides (4–10) using the user's proven carousel structure.
+ * Slide count adapts the structure: hook + pain + CTA always present;
+ * rehook/aha/takeaway/extra-value scale up as N grows.
  */
 export async function generateViralCarouselSlides(
   content: string,
-  additionalInfo?: string,
-  aimStyleDescription?: string,
-  brandSettings?: BrandSettings,
-  brandBriefContext?: string | null
+  options: {
+    numSlides?: number
+    additionalInfo?: string
+    aimStyleDescription?: string
+    brandSettings?: BrandSettings
+    brandBriefContext?: string | null
+  } = {}
 ): Promise<ViralSlide[]> {
+  const {
+    numSlides = 10,
+    additionalInfo,
+    aimStyleDescription,
+    brandSettings,
+    brandBriefContext,
+  } = options
+
   const client = getClient()
   const { models } = await getPlatformConfig()
+
+  const plan = planViralSlides(numSlides)
+  const structurePrompt = buildViralStructurePrompt(plan)
+  const outputExample = buildViralOutputExample(plan)
 
   const brandContext = brandBriefContext
     ? `\nBRAND IDENTITY — write every slide in this brand's voice, for their audience:\n${brandBriefContext}`
@@ -255,9 +332,15 @@ export async function generateViralCarouselSlides(
       role: 'user',
       content: `You are a world-class viral content strategist who creates highly addictive Instagram carousel posts using psychology, storytelling, and curiosity loops.
 
+Your goal is to turn any topic into a scroll-stopping, binge-worthy carousel that maximizes saves, shares, and comments.
+
+CORE PRINCIPLE:
+Every carousel must feel like a story unfolding — not just information.
+Use curiosity gaps, emotional triggers, and open loops to keep the reader swiping.
+
 ${BRAND_VOICE}
 
-${VIRAL_CAROUSEL_STRUCTURE}
+${structurePrompt}
 
 WRITING STYLE:
 - Short, sharp sentences. No fluff.
@@ -271,27 +354,16 @@ SLIDE TEXT RULES:
 - "text" = the bold HEADLINE — max 8 words, punchy, scroll-stopping. This is the giant text on the slide.
 - "body" = 1–2 supporting sentences that expand on the headline. Max 25 words. Conversational. Adds context or creates curiosity.
 
-PSYCHOLOGICAL TRIGGERS TO USE: Curiosity gap, pattern interrupt, FOMO, contrarian ideas, fast rewards.
+PSYCHOLOGICAL TRIGGERS TO USE: curiosity gap, pattern interrupt, social proof, FOMO, contrarian ideas, fast rewards.
 ${brandContext}${aimContext}${extraContext}
 
 SOURCE CONTENT TO BASE THE CAROUSEL ON:
 ${content}
 
-OUTPUT FORMAT — return ONLY a valid JSON array, no markdown, no explanation:
-[
-  {"number": 1, "type": "hook", "label": "HOOK", "text": "Bold headline here.", "body": "Supporting sentence that builds intrigue."},
-  {"number": 2, "type": "rehook", "label": "REHOOK", "text": "Second hook headline.", "body": "Supporting sentence."},
-  {"number": 3, "type": "pain", "label": "RELATABLE PAIN", "text": "Pain point headline.", "body": "Supporting sentence."},
-  {"number": 4, "type": "value", "label": "VALUE 1", "text": "Value headline.", "body": "Supporting sentence."},
-  {"number": 5, "type": "value", "label": "VALUE 2", "text": "Value headline.", "body": "Supporting sentence."},
-  {"number": 6, "type": "value", "label": "VALUE 3", "text": "Value headline.", "body": "Supporting sentence."},
-  {"number": 7, "type": "value", "label": "VALUE 4", "text": "Value headline.", "body": "Supporting sentence."},
-  {"number": 8, "type": "turning_point", "label": "AHA MOMENT", "text": "AHA headline.", "body": "Supporting sentence."},
-  {"number": 9, "type": "takeaway", "label": "TAKEAWAY", "text": "Takeaway headline.", "body": "Supporting sentence."},
-  {"number": 10, "type": "cta", "label": "CTA", "text": "CTA headline.", "body": "Specific action for the reader to take."}
-]
+OUTPUT FORMAT — return ONLY a valid JSON array of ${plan.length} objects, no markdown, no explanation:
+${outputExample}
 
-Generate all 10 slides now. Make each slide scroll-stopping.`,
+Generate all ${plan.length} slides now. Make each slide scroll-stopping.`,
     }],
   })
 

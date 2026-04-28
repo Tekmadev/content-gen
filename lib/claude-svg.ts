@@ -47,13 +47,26 @@ type StyleTheme = {
 }
 
 const STYLE_THEMES: Record<CarouselStyle, StyleTheme> = {
+  // Infographic
   white_card:      { bg: '#FFFFFF', text: '#0F0F0F', accent: '#0F0F0F', subtext: '#555555' },
   dark_statement:  { bg: '#0F0F0F', text: '#FFFFFF', accent: '#FFFFFF', subtext: '#AAAAAA' },
+  brand_colors:    { bg: '#0F0F0F', text: '#FFFFFF', accent: '#F97316', subtext: '#BBBBBB' },
+  // Image-rich (Claude SVG falls back to these flat themes — actual photographic
+  // backgrounds aren't possible in SVG mode, but the theme gives a sensible look)
+  modern:          { bg: '#1F2937', text: '#FFFFFF', accent: '#E5E7EB', subtext: '#D1D5DB',
+                     gradient: { from: '#0F172A', to: '#334155' } },
+  minimal:         { bg: '#FAFAF9', text: '#1C1917', accent: '#A8A29E', subtext: '#57534E' },
+  bold:            { bg: '#7F1D1D', text: '#FFFFFF', accent: '#FDE047', subtext: '#FECACA',
+                     gradient: { from: '#7F1D1D', to: '#EA580C' } },
+  futuristic:      { bg: '#1E1B4B', text: '#FFFFFF', accent: '#67E8F9', subtext: '#C7D2FE',
+                     gradient: { from: '#3730A3', to: '#9333EA' } },
+  playful:         { bg: '#FEF3C7', text: '#9F1239', accent: '#F472B6', subtext: '#7C2D12',
+                     gradient: { from: '#FECDD3', to: '#FDE68A' } },
+  // Legacy
   gradient_bold:   { bg: '#1a1a2e', text: '#FFFFFF', accent: '#7C3AED', subtext: '#C4B5FD',
                      gradient: { from: '#1a1a2e', to: '#4C1D95' } },
   cinematic:       { bg: '#111827', text: '#FFFFFF', accent: '#F59E0B', subtext: '#9CA3AF' },
   branded_minimal: { bg: '#FFFFFF', text: '#0F0F0F', accent: '#F97316', subtext: '#666666' },
-  brand_colors:    { bg: '#0F0F0F', text: '#FFFFFF', accent: '#F97316', subtext: '#BBBBBB' },
 }
 
 // ── Client ───────────────────────────────────────────────────────────────────

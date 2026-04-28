@@ -114,7 +114,21 @@ export interface BrandSettings {
 
 export type CarouselPlatform = 'instagram_carousel' | 'linkedin_image' | 'x_image'
 
-export type CarouselStyle = 'white_card' | 'dark_statement' | 'gradient_bold' | 'cinematic' | 'branded_minimal' | 'brand_colors'
+export type CarouselStyle =
+  // Infographic styles (text-focused, work for all generators including Claude SVG)
+  | 'white_card'
+  | 'dark_statement'
+  | 'brand_colors'
+  // Legacy (kept for backward compat with old saved jobs)
+  | 'gradient_bold'
+  | 'cinematic'
+  | 'branded_minimal'
+  // Image-rich styles (background imagery, only for Gemini/OpenAI/Canva)
+  | 'modern'
+  | 'minimal'
+  | 'bold'
+  | 'futuristic'
+  | 'playful'
 
 export interface CarouselSlide {
   number: number

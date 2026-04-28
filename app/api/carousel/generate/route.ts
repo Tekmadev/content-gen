@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   }: {
     content: string
     platform?: CarouselPlatform
-    numSlides?: number
+    numSlides?: number    // 4–10 (viral mode), 1–10 (standard mode)
     style?: CarouselStyle
     aspectRatio?: AspectRatio
     draftId?: string
@@ -82,6 +82,9 @@ export async function POST(request: Request) {
     imageGenerator?: ImageGenerator
     canvaTemplateId?: string
   } = body
+
+  // Viral mode: slide count is 4–10, defaults to 10
+  const viralSlideCount = Math.min(Math.max(4, numSlides ?? 10), 10)
 
   if (!content) {
     return NextResponse.json({ error: 'content is required' }, { status: 400 })
@@ -186,10 +189,14 @@ export async function POST(request: Request) {
           aimStyleDescription = await analyzeAimImage(aimImageBase64, aimImageMime)
         }
 
-        // Generate 10 viral slide texts
-        const slides = await generateViralCarouselSlides(
-          content, additionalInfo, aimStyleDescription, brandSettings, brandBriefContext
-        )
+        // Generate viral slide texts (4–10 slides, configurable)
+        const slides = await generateViralCarouselSlides(content, {
+          numSlides: viralSlideCount,
+          additionalInfo,
+          aimStyleDescription,
+          brandSettings,
+          brandBriefContext,
+        })
 
         // Auto-fill Canva template + export to images
         const designId = await canvaAutofill(token, canvaTemplateId.trim(), slides)
@@ -223,11 +230,12 @@ export async function POST(request: Request) {
         const backend = imageGenerator ?? 'gemini'
         const generatedSlides = await generateViralCarousel({
           content,
+          numSlides: viralSlideCount,
           additionalInfo,
           aimImageBase64,
           aimImageMime,
           aspectRatio: aspectRatio ?? '3:4',
-          style: style ?? 'dark_statement',
+          style: style ?? 'modern',
           brandSettings,
           brandBriefContext,
           imageGenerator: backend,

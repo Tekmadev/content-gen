@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
-import { CAROUSEL_STYLES } from '@/lib/carousel-styles'
+import { CAROUSEL_STYLES, stylesForGenerator } from '@/lib/carousel-styles'
 import type { BrandSettings, CarouselSlide, CarouselStyle, ImageGenerator, SourceType } from '@/lib/types'
 import type { AspectRatio } from '@/lib/gemini'
 
@@ -25,15 +25,17 @@ const RATIO_OPTIONS: { value: AspectRatio; label: string; dims: string; note: st
   { value: '4:5', label: '4:5', dims: '1080×1350', note: 'Portrait' },
 ]
 
-const STYLE_KEYS = Object.keys(CAROUSEL_STYLES) as CarouselStyle[]
-
 const GENERATION_STEPS = [
   'Analyzing inspiration image',
-  'Writing 10 viral slide texts',
+  'Writing viral slide texts',
   'Crafting Instagram caption',
   'Generating slide images',
   'Saving to your library',
 ]
+
+// Slide count bounds for the viral studio
+const MIN_SLIDES = 4
+const MAX_SLIDES = 10
 
 const SLIDE_TYPE_COLORS: Record<string, string> = {
   hook:          'bg-red-100 text-red-700',
@@ -116,8 +118,17 @@ function CarouselStudioContent() {
   const [imageGenerator, setImageGenerator] = useState<ImageGenerator>('gemini')
   const [canvaConnected, setCanvaConnected] = useState(false)
   const [canvaTemplateId, setCanvaTemplateId] = useState('')
-  const [style, setStyle] = useState<CarouselStyle>('dark_statement')
+  const [style, setStyle] = useState<CarouselStyle>('modern')
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4')
+  const [numSlides, setNumSlides] = useState<number>(10)
+
+  // When the generator changes, pick a valid style (Claude SVG only supports infographic)
+  useEffect(() => {
+    const allowed = stylesForGenerator(imageGenerator)
+    if (!allowed.includes(style)) {
+      setStyle(allowed[0])
+    }
+  }, [imageGenerator, style])
 
   // ── Generation state ──────────────────────────────────────────────────────
   const [generating, setGenerating] = useState(false)
@@ -247,6 +258,7 @@ function CarouselStudioContent() {
         body: JSON.stringify({
           content,
           viralMode: true,
+          numSlides,
           additionalInfo: additionalInfo.trim() || undefined,
           aimImageBase64: aimImageBase64 ?? undefined,
           aimImageMime: aimImageBase64 ? aimImageMime : undefined,
@@ -332,7 +344,7 @@ function CarouselStudioContent() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-[var(--foreground)]">Carousel Studio</h1>
           <p className="text-sm text-[var(--muted)] mt-1">
-            Turn any content into a 10-slide viral Instagram carousel — with your brand identity.
+            Turn any content into a viral Instagram carousel (4–10 slides) — written in your brand voice.
           </p>
         </div>
 
@@ -483,11 +495,11 @@ function CarouselStudioContent() {
                   {brandSettings.brand_name && (
                     <span className="text-xs font-medium text-[var(--foreground)]">{brandSettings.brand_name}</span>
                   )}
-                  <a href="/settings" className="ml-auto text-xs text-[var(--muted)] hover:text-[var(--foreground)] underline">Edit</a>
+                  <a href="/brand" className="ml-auto text-xs text-[var(--muted)] hover:text-[var(--foreground)] underline">Edit</a>
                 </div>
               ) : (
                 <p className="text-xs text-[var(--muted)]">
-                  No brand settings found. <a href="/settings" className="underline text-[var(--primary)]">Set them in Settings →</a>
+                  No brand settings found. <a href="/brand" className="underline text-[var(--primary)]">Set them on the Brand page →</a>
                 </p>
               )}
 
@@ -595,8 +607,13 @@ function CarouselStudioContent() {
               {(imageGenerator === 'gemini' || imageGenerator === 'openai' || imageGenerator === 'claude_svg') && (
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-medium text-[var(--foreground)]">Visual Style</label>
+                  <p className="text-[11px] text-[var(--muted)]">
+                    {imageGenerator === 'claude_svg'
+                      ? 'Claude SVG only supports infographic styles (text + shapes, no photographic backgrounds).'
+                      : 'Image-rich styles use a topic-relevant background. Infographic styles are pure text + shapes.'}
+                  </p>
                   <div className="flex flex-col gap-1.5">
-                    {STYLE_KEYS.map((s) => {
+                    {stylesForGenerator(imageGenerator).map((s) => {
                       const info = CAROUSEL_STYLES[s]
                       return (
                         <button
@@ -609,8 +626,17 @@ function CarouselStudioContent() {
                           }`}
                         >
                           <StyleSwatch styleKey={s} brandSettings={brandSettings} />
-                          <div className="flex flex-col gap-0.5 min-w-0">
-                            <span className="text-xs font-semibold text-[var(--foreground)]">{info.label}</span>
+                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold text-[var(--foreground)]">{info.label}</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
+                                info.kind === 'image-rich'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {info.kind === 'image-rich' ? 'IMAGE' : 'INFO'}
+                              </span>
+                            </div>
                             <span className="text-xs text-[var(--muted)] line-clamp-1">{info.description}</span>
                           </div>
                         </button>
@@ -624,7 +650,7 @@ function CarouselStudioContent() {
                   )}
                   {imageGenerator === 'openai' && (
                     <p className="text-[11px] text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
-                      ⬡ Requires <code className="font-mono">OPENAI_API_KEY</code> in your environment. DALL-E 3 outputs 1024px images — sizes are auto-mapped to nearest supported ratio.
+                      ⬡ Requires <code className="font-mono">OPENAI_API_KEY</code> in your environment. Outputs 1024px images — sizes auto-mapped to nearest supported ratio.
                     </p>
                   )}
                 </div>
@@ -675,10 +701,35 @@ function CarouselStudioContent() {
               )}
             </div>
 
-            {/* 5. Aspect Ratio */}
+            {/* 5. Slide Count — 4 to 10 slider */}
+            <div className="bg-white rounded-2xl border border-[var(--border)] p-5 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-sm text-[var(--foreground)]">5. Slide Count</h2>
+                <span className="text-sm font-bold text-[var(--primary)]">{numSlides} slides</span>
+              </div>
+              <p className="text-xs text-[var(--muted)]">
+                More slides = deeper story. Hook + Pain + CTA always present; rehook, AHA, takeaway, and extra value scale up automatically.
+              </p>
+              <input
+                type="range"
+                min={MIN_SLIDES}
+                max={MAX_SLIDES}
+                step={1}
+                value={numSlides}
+                onChange={(e) => setNumSlides(parseInt(e.target.value, 10))}
+                className="w-full h-2 bg-[var(--surface)] rounded-full appearance-none cursor-pointer accent-[var(--primary)]"
+              />
+              <div className="flex justify-between text-[10px] text-[var(--muted)] font-medium px-1">
+                {Array.from({ length: MAX_SLIDES - MIN_SLIDES + 1 }, (_, i) => i + MIN_SLIDES).map((n) => (
+                  <span key={n} className={n === numSlides ? 'text-[var(--primary)] font-bold' : ''}>{n}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* 6. Aspect Ratio */}
             {imageGenerator !== 'canva' && (
               <div className="bg-white rounded-2xl border border-[var(--border)] p-5 flex flex-col gap-3">
-                <h2 className="font-semibold text-sm text-[var(--foreground)]">5. Aspect Ratio</h2>
+                <h2 className="font-semibold text-sm text-[var(--foreground)]">6. Aspect Ratio</h2>
                 <div className="grid grid-cols-3 gap-2">
                   {RATIO_OPTIONS.map((opt) => (
                     <button
@@ -711,7 +762,7 @@ function CarouselStudioContent() {
               {generating ? (
                 <><LoadingSpinner /><span>Generating carousel…</span></>
               ) : (
-                <><span>✦</span><span>Generate 10-Slide Carousel</span></>
+                <><span>✦</span><span>Generate {numSlides}-Slide Carousel</span></>
               )}
             </button>
 
@@ -750,7 +801,7 @@ function CarouselStudioContent() {
                 <div className="w-16 h-16 rounded-2xl bg-[var(--surface)] flex items-center justify-center text-3xl mb-4">🎠</div>
                 <p className="font-semibold text-[var(--foreground)]">Your carousel will appear here</p>
                 <p className="text-sm text-[var(--muted)] mt-1 max-w-xs leading-relaxed">
-                  Add your content on the left, then click Generate. Claude writes 10 viral slides, then your chosen generator creates the images.
+                  Add your content on the left, then click Generate. Claude writes the slide texts in your brand voice, then your chosen generator creates the images.
                 </p>
                 <div className="mt-6 flex flex-col gap-2 text-left w-full max-w-xs">
                   {['HOOK — pattern interrupt', 'REHOOK — open loop', 'PAIN — relatable story', 'VALUE × 4 — key insights', 'AHA MOMENT — turning point', 'TAKEAWAY — clear action', 'CTA — drive engagement'].map((s) => (
@@ -1024,6 +1075,7 @@ function StyleSwatch({ styleKey, brandSettings }: { styleKey: CarouselStyle; bra
   }
 
   const swatches: Record<Exclude<CarouselStyle, 'brand_colors'>, React.ReactNode> = {
+    // Infographic
     white_card: (
       <div className="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center flex-shrink-0">
         <div className="w-5 h-1.5 bg-gray-900 rounded" />
@@ -1034,6 +1086,35 @@ function StyleSwatch({ styleKey, brandSettings }: { styleKey: CarouselStyle; bra
         <div className="w-5 h-1.5 bg-white rounded" />
       </div>
     ),
+    // Image-rich (new)
+    modern: (
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-300 via-slate-100 to-slate-200 flex items-center justify-center flex-shrink-0 relative overflow-hidden border border-slate-200">
+        <div className="absolute inset-x-0 bottom-0 h-3 bg-gradient-to-t from-slate-900/60 to-transparent" />
+        <div className="w-5 h-1.5 bg-white rounded relative z-10" />
+      </div>
+    ),
+    minimal: (
+      <div className="w-8 h-8 rounded-lg bg-stone-50 border border-stone-200 flex items-center justify-center flex-shrink-0">
+        <div className="w-3 h-1 bg-stone-700 rounded" />
+      </div>
+    ),
+    bold: (
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-700 via-rose-600 to-orange-600 flex items-center justify-center flex-shrink-0 relative overflow-hidden">
+        <div className="absolute inset-0 bg-black/30" />
+        <div className="w-5 h-1.5 bg-yellow-300 rounded relative z-10" />
+      </div>
+    ),
+    futuristic: (
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-700 via-purple-600 to-fuchsia-500 flex items-center justify-center flex-shrink-0 relative overflow-hidden">
+        <div className="w-5 h-1.5 bg-cyan-300 rounded shadow-[0_0_4px_rgba(103,232,249,0.8)]" />
+      </div>
+    ),
+    playful: (
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-pink-300 via-amber-200 to-emerald-300 flex items-center justify-center flex-shrink-0">
+        <div className="w-5 h-1.5 bg-rose-700 rounded" />
+      </div>
+    ),
+    // Legacy (kept for old saved jobs)
     gradient_bold: (
       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center flex-shrink-0">
         <div className="w-5 h-1.5 bg-white rounded" />
