@@ -46,14 +46,33 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [usage, setUsage] = useState<UsageData | null>(null)
 
+  // Ref mirror so polling can read latest posts without re-mounting the effect
+  const recentPostsRef = useRef<PostDraft[]>([])
+  recentPostsRef.current = recentPosts
+
   const fetchRecentPosts = useCallback(async () => {
-    const res = await fetch('/api/posts?limit=5')
-    if (res.ok) setRecentPosts(await res.json())
+    try {
+      const res = await fetch('/api/posts?limit=5')
+      if (!res.ok) return
+      const data: PostDraft[] = await res.json()
+      // Skip update if signature unchanged — prevents render churn during polling
+      const sig = (arr: PostDraft[]) =>
+        arr.map((p) => `${p.id}:${p.status}:${p.linkedin_url ?? ''}:${p.instagram_url ?? ''}:${p.x_url ?? ''}`).join('|')
+      if (sig(data) !== sig(recentPostsRef.current)) {
+        setRecentPosts(data)
+      }
+    } catch (err) {
+      console.error('[dashboard] fetchRecentPosts failed:', err)
+    }
   }, [])
 
   const fetchStats = useCallback(async () => {
-    const res = await fetch('/api/stats')
-    if (res.ok) setStats(await res.json())
+    try {
+      const res = await fetch('/api/stats')
+      if (res.ok) setStats(await res.json())
+    } catch (err) {
+      console.error('[dashboard] fetchStats failed:', err)
+    }
   }, [])
 
   useEffect(() => {
@@ -74,15 +93,20 @@ export default function DashboardPage() {
       .catch(() => {})
   }, [fetchRecentPosts, fetchStats, supabase.auth])
 
-  // Poll while any post is in a non-terminal state
+  // Polling — set up ONCE on mount, runs every 3s, fetches only if there's an active post.
+  // Reading from `recentPostsRef.current` (not state) so the effect never re-mounts.
   useEffect(() => {
-    const hasActive = recentPosts.some(
-      (p) => p.status === 'generating' || p.status === 'publishing'
-    )
-    if (!hasActive) return
-    const id = setInterval(() => { fetchRecentPosts(); fetchStats() }, 3000)
+    const id = setInterval(() => {
+      const hasActive = recentPostsRef.current.some(
+        (p) => p.status === 'generating' || p.status === 'publishing'
+      )
+      if (hasActive) {
+        fetchRecentPosts()
+        fetchStats()
+      }
+    }, 3000)
     return () => clearInterval(id)
-  }, [recentPosts, fetchRecentPosts, fetchStats])
+  }, [fetchRecentPosts, fetchStats])
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault()

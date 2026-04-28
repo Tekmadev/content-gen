@@ -38,24 +38,49 @@ export default function PostsPage() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('newest')
 
+  // Ref mirror of `posts` so the polling effect can read latest without re-mounting.
+  // Without this, the effect re-runs every fetch (because `posts` changes), which
+  // clears + resets the interval on every render — causing a tight refresh loop
+  // when combined with strict-mode double-invokes or other re-renders.
+  const postsRef = useRef<PostDraft[]>([])
+  postsRef.current = posts
+
   const fetchPosts = useCallback(async () => {
-    const res = await fetch('/api/posts')
-    if (res.ok) setPosts(await res.json())
-    setLoading(false)
+    try {
+      const res = await fetch('/api/posts')
+      if (!res.ok) return
+      const data: PostDraft[] = await res.json()
+      // Only update state if the data actually changed — avoids unnecessary re-renders
+      // (compare by id+status+updated fields, not deep equality of large objects).
+      const sig = (arr: PostDraft[]) =>
+        arr.map((p) => `${p.id}:${p.status}:${p.linkedin_url ?? ''}:${p.instagram_url ?? ''}:${p.x_url ?? ''}`).join('|')
+      if (sig(data) !== sig(postsRef.current)) {
+        setPosts(data)
+      }
+    } catch (err) {
+      console.error('[posts] fetch failed:', err)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
+  // Initial load — once
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
     fetchPosts()
-  }, [fetchPosts])
+  }, [fetchPosts, supabase])
 
-  // Poll while any post is active
+  // Polling — set up ONCE on mount, runs every 3s, fetches only if there's an active post.
+  // Reading from `postsRef.current` (not `posts` state) so the effect never re-mounts.
   useEffect(() => {
-    const hasActive = posts.some((p) => p.status === 'generating' || p.status === 'publishing')
-    if (!hasActive) return
-    const id = setInterval(fetchPosts, 3000)
+    const id = setInterval(() => {
+      const hasActive = postsRef.current.some(
+        (p) => p.status === 'generating' || p.status === 'publishing'
+      )
+      if (hasActive) fetchPosts()
+    }, 3000)
     return () => clearInterval(id)
-  }, [posts, fetchPosts])
+  }, [fetchPosts])
 
   async function handleRetry(postId: string, e: React.MouseEvent) {
     e.stopPropagation()
