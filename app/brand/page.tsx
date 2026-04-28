@@ -72,19 +72,8 @@ export default function BrandPage() {
       .catch(() => setPageState('chat'))
   }, [user])
 
-  // Called when chat signals completion — triggers generation
-  const handleChatComplete = useCallback(async (history: ChatMessage[], images: string[]) => {
-    // ⚡ Persist chat history IMMEDIATELY to state + DB before generation starts.
-    // This ensures "Try again" restores the full conversation even if generation fails.
-    const withHistory = { ...EMPTY_BRIEF, chat_history: history, reference_images: images }
-    setBrief(withHistory)
-    // Fire-and-forget save (don't await — generation can start in parallel)
-    fetch('/api/brand-brief', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(withHistory),
-    }).catch(() => {}) // non-fatal
-
+  // Run the generate pipeline — extracted so we can reuse it for "Retry generation"
+  const runGeneration = useCallback(async (history: ChatMessage[], images: string[]) => {
     setPageState('generating')
     setGenerateError('')
     try {
@@ -113,6 +102,25 @@ export default function BrandPage() {
       setPageState('error')
     }
   }, [])
+
+  // Called when chat signals completion — saves history first, then generates
+  const handleChatComplete = useCallback(async (history: ChatMessage[], images: string[]) => {
+    // ⚡ Persist chat history IMMEDIATELY to state + DB before generation starts.
+    // This ensures "Try again" / refresh always restores the full conversation.
+    const withHistory: BrandBrief = { ...EMPTY_BRIEF, chat_history: history, reference_images: images }
+    setBrief(withHistory)
+    // Await the save so the row exists before we try to upsert generated data on top
+    try {
+      await fetch('/api/brand-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(withHistory),
+      })
+    } catch {
+      // non-fatal — generation will still attempt to upsert
+    }
+    await runGeneration(history, images)
+  }, [runGeneration])
 
   // Called when user edits individual fields in the brief display
   const handleUpdate = useCallback(async (patch: Partial<BrandBrief>) => {
@@ -206,12 +214,23 @@ export default function BrandPage() {
           <div className="border border-red-500/30 bg-red-500/10 rounded-2xl p-8 text-center space-y-4">
             <p className="text-red-400 font-medium">Generation failed</p>
             <p className="text-sm text-[var(--muted-foreground)]">{generateError}</p>
-            <button
-              onClick={() => setPageState('chat')}
-              className="text-sm border border-[var(--border)] px-4 py-2 rounded-lg hover:bg-[var(--surface)] transition-colors text-[var(--foreground)]"
-            >
-              Try again
-            </button>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Your chat ({(brief.chat_history ?? []).length} messages) is safely saved — choose how to retry:
+            </p>
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <button
+                onClick={() => runGeneration(brief.chat_history ?? [], brief.reference_images ?? [])}
+                className="text-sm font-medium bg-[var(--accent)] text-white px-4 py-2 rounded-lg hover:opacity-90 transition"
+              >
+                ✨ Retry generation
+              </button>
+              <button
+                onClick={() => setPageState('chat')}
+                className="text-sm border border-[var(--border)] px-4 py-2 rounded-lg hover:bg-[var(--surface)] transition-colors text-[var(--foreground)]"
+              >
+                Continue chat
+              </button>
+            </div>
           </div>
         )}
 

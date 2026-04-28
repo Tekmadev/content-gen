@@ -42,6 +42,23 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streaming])
 
+  // Autosave — POST current chat state to /api/brand-brief so refreshes restore it
+  const autosave = useCallback(async (history: ChatMessage[], images: string[]) => {
+    try {
+      await fetch('/api/brand-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_history: history,
+          reference_images: images,
+          chat_completed: false,
+        }),
+      })
+    } catch {
+      // non-fatal — don't block the chat if save fails
+    }
+  }, [])
+
   const send = useCallback(async (text: string, uploadedUrls?: string[]) => {
     const userText = text.trim()
     if (!userText && !uploadedUrls?.length) return
@@ -93,6 +110,16 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
         })
       }
 
+      // Build the new full history (used for both autosave + completion check)
+      const newHistory: ChatMessage[] = [
+        ...history,
+        { role: 'user', content: userMsg.content },
+        { role: 'model', content: fullResponse },
+      ]
+
+      // ⚡ Autosave to DB so refresh restores the conversation
+      autosave(newHistory, referenceImages)
+
       // Check if the model signalled completion
       if (fullResponse.includes('"action":"BRIEF_COMPLETE"')) {
         const cleanResponse = fullResponse
@@ -105,11 +132,11 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
           return next
         })
 
-        // Build final history and trigger generation
+        // Replace the model message in history with the cleaned version
         const finalHistory: ChatMessage[] = [
           ...history,
           { role: 'user', content: userMsg.content },
-          { role: 'model', content: fullResponse },
+          { role: 'model', content: cleanResponse },
         ]
         setGenerating(true)
         onComplete(finalHistory, referenceImages)
@@ -120,6 +147,18 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
     } finally {
       setStreaming(false)
     }
+  }, [messages, referenceImages, onComplete, autosave])
+
+  // Manual "I'm done — generate my brief" trigger.
+  // Safety net for when the bot doesn't emit BRIEF_COMPLETE on its own.
+  const finishManually = useCallback(() => {
+    const history: ChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }))
+    if (history.length < 4) {
+      setError('Please answer at least a couple of questions before finishing.')
+      return
+    }
+    setGenerating(true)
+    onComplete(history, referenceImages)
   }, [messages, referenceImages, onComplete])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -218,6 +257,22 @@ export default function BrandChat({ initialHistory, referenceImages: initialImag
           {referenceImages.map((url, i) => (
             <img key={i} src={url} alt={`ref-${i}`} className="h-12 w-12 rounded-lg object-cover border border-[var(--border)]" />
           ))}
+        </div>
+      )}
+
+      {/* Manual "Done" button — appears once the chat has enough exchanges.
+          Safety net if the AI never emits BRIEF_COMPLETE. */}
+      {!generating && !streaming && messages.filter((m) => m.role === 'user').length >= 3 && (
+        <div className="px-4 pb-2 flex items-center justify-between gap-3">
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Done answering? Generate your brand brief from what you've shared so far.
+          </p>
+          <button
+            onClick={finishManually}
+            className="text-xs font-medium bg-[var(--accent)] text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition shrink-0"
+          >
+            ✨ Generate brief
+          </button>
         </div>
       )}
 

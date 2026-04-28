@@ -156,6 +156,17 @@ export default function BrandBriefDisplay({ brief, onUpdate, onReset }: Props) {
   const [tab, setTab] = useState<'overview' | 'raw'>('overview')
   const [saving, setSaving] = useState(false)
 
+  // Null-safe defaults — Gemini occasionally omits fields and the response
+  // payload may have undefined arrays. Default everything so the UI never crashes.
+  const personalityWords = brief.personality_words ?? []
+  const contentPillars   = brief.content_pillars   ?? []
+  const alwaysSay        = brief.always_say        ?? []
+  const neverSay         = brief.never_say         ?? []
+  const examplePhrases   = brief.example_phrases   ?? []
+  const audiences        = brief.audiences         ?? []
+  const services         = brief.services          ?? []
+  const referenceImages  = brief.reference_images  ?? []
+
   const save = async (patch: Partial<BrandBrief>) => {
     setSaving(true)
     await onUpdate(patch)
@@ -252,7 +263,7 @@ export default function BrandBriefDisplay({ brief, onUpdate, onReset }: Props) {
             <div className="space-y-3">
               <EditableList
                 label="Personality words"
-                items={brief.personality_words}
+                items={personalityWords}
                 onSave={(v) => save({ personality_words: v })}
               />
               <EditableField label="Tone of voice" value={brief.tone_of_voice}
@@ -269,7 +280,7 @@ export default function BrandBriefDisplay({ brief, onUpdate, onReset }: Props) {
             <div className="space-y-3">
               <EditableList
                 label="Content pillars"
-                items={brief.content_pillars}
+                items={contentPillars}
                 onSave={(v) => save({ content_pillars: v })}
               />
               <EditableField label="Content goals" value={brief.content_goals}
@@ -280,11 +291,11 @@ export default function BrandBriefDisplay({ brief, onUpdate, onReset }: Props) {
           {/* Voice Rules */}
           <Section title="Voice Rules" icon="🗣️">
             <div className="space-y-3">
-              <EditableList label="Always say" items={brief.always_say}
+              <EditableList label="Always say" items={alwaysSay}
                 onSave={(v) => save({ always_say: v })} />
-              <EditableList label="Never say" items={brief.never_say}
+              <EditableList label="Never say" items={neverSay}
                 onSave={(v) => save({ never_say: v })} />
-              <EditableList label="Example phrases" items={brief.example_phrases}
+              <EditableList label="Example phrases" items={examplePhrases}
                 onSave={(v) => save({ example_phrases: v })} />
             </div>
           </Section>
@@ -293,7 +304,7 @@ export default function BrandBriefDisplay({ brief, onUpdate, onReset }: Props) {
           <div className="md:col-span-2">
             <Section title="Target Audiences" icon="🎯">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {brief.audiences.length ? brief.audiences.map((a: AudienceSegment, i) => (
+                {audiences.length ? audiences.map((a: AudienceSegment, i) => (
                   <div key={i} className="border border-[var(--border)] rounded-xl p-4 space-y-2">
                     <p className="font-semibold text-sm text-[var(--foreground)]">{a.name}</p>
                     <p className="text-xs text-[var(--muted-foreground)]">{a.description}</p>
@@ -333,7 +344,7 @@ export default function BrandBriefDisplay({ brief, onUpdate, onReset }: Props) {
           <div className="md:col-span-2">
             <Section title="Services & Offerings" icon="🛠️">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {brief.services.length ? brief.services.map((s: BriefService, i) => (
+                {services.length ? services.map((s: BriefService, i) => (
                   <div key={i} className="border border-[var(--border)] rounded-xl p-4 space-y-2">
                     <p className="font-semibold text-sm text-[var(--foreground)]">{s.name}</p>
                     <p className="text-xs text-[var(--muted-foreground)]">{s.description}</p>
@@ -354,11 +365,11 @@ export default function BrandBriefDisplay({ brief, onUpdate, onReset }: Props) {
           </div>
 
           {/* Reference Images */}
-          {brief.reference_images?.length > 0 && (
+          {referenceImages.length > 0 && (
             <div className="md:col-span-2">
               <Section title="Visual References" icon="🖼️">
                 <div className="flex flex-wrap gap-3">
-                  {brief.reference_images.map((url, i) => (
+                  {referenceImages.map((url, i) => (
                     <img
                       key={i}
                       src={url}
