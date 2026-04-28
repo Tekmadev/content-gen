@@ -7,10 +7,12 @@ import AppShell from '@/components/AppShell'
 import type { PostDraft, SourceType } from '@/lib/types'
 
 const SOURCE_TYPES: { value: SourceType; label: string; placeholder: string; isText?: boolean }[] = [
-  { value: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/watch?v=...' },
-  { value: 'article', label: 'Article', placeholder: 'https://example.com/article' },
-  { value: 'pdf', label: 'PDF URL', placeholder: 'https://example.com/document.pdf' },
-  { value: 'email', label: 'Email / Text', placeholder: 'Paste your content here...', isText: true },
+  { value: 'youtube',   label: 'YouTube',    placeholder: 'https://youtube.com/watch?v=...' },
+  { value: 'tiktok',    label: 'TikTok',     placeholder: 'https://www.tiktok.com/@user/video/...' },
+  { value: 'instagram', label: 'Instagram',  placeholder: 'https://www.instagram.com/reel/...' },
+  { value: 'article',   label: 'Article',    placeholder: 'https://example.com/article' },
+  { value: 'pdf',       label: 'PDF URL',    placeholder: 'https://example.com/document.pdf' },
+  { value: 'email',     label: 'Email / Text', placeholder: 'Paste your content here...', isText: true },
 ]
 
 const STEPS = ['Extracting content', 'Generating posts', 'Creating visuals']

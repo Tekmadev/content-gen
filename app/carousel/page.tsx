@@ -11,10 +11,12 @@ import type { AspectRatio } from '@/lib/gemini'
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SOURCE_TYPES: { value: SourceType; label: string; placeholder: string; isText?: boolean }[] = [
-  { value: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/watch?v=...' },
-  { value: 'article', label: 'Article', placeholder: 'https://example.com/article' },
-  { value: 'pdf',     label: 'PDF URL', placeholder: 'https://example.com/document.pdf' },
-  { value: 'email',   label: 'Paste Text', placeholder: 'Paste your content here…', isText: true },
+  { value: 'youtube',   label: 'YouTube',   placeholder: 'https://youtube.com/watch?v=...' },
+  { value: 'tiktok',    label: 'TikTok',    placeholder: 'https://www.tiktok.com/@user/video/...' },
+  { value: 'instagram', label: 'Instagram', placeholder: 'https://www.instagram.com/reel/...' },
+  { value: 'article',   label: 'Article',   placeholder: 'https://example.com/article' },
+  { value: 'pdf',       label: 'PDF URL',   placeholder: 'https://example.com/document.pdf' },
+  { value: 'email',     label: 'Paste Text', placeholder: 'Paste your content here…', isText: true },
 ]
 
 const RATIO_OPTIONS: { value: AspectRatio; label: string; dims: string; note: string }[] = [

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { extractContent } from '@/lib/blotato'
+import { extractContent } from '@/lib/extractor'
 import { generateAllPosts } from '@/lib/anthropic'
 import type { SourceInput } from '@/lib/types'
 
@@ -30,13 +30,16 @@ export async function POST(request: Request) {
 
   if (!content) {
     const sourceType = draft.source_type as string
-    const blotatoSource: SourceInput = {
-      sourceType: sourceType === 'email' ? ('text' as SourceInput['sourceType']) : (sourceType as SourceInput['sourceType']),
+    console.log('[retry] re-extracting draftId=%s sourceType=%s', draftId, sourceType)
+
+    const source: SourceInput = {
+      sourceType: sourceType as SourceInput['sourceType'],
       url: draft.source_url ?? undefined,
       text: draft.source_content ?? undefined,
     }
 
-    const extracted = await extractContent(blotatoSource).catch(async (err: Error) => {
+    const extracted = await extractContent(source).catch(async (err: Error) => {
+      console.error('[retry] extraction failed draftId=%s:', draftId, err.message)
       await supabase.from('posts_log').update({ status: 'failed', error_message: err.message }).eq('id', draftId)
       return null
     })
@@ -46,7 +49,10 @@ export async function POST(request: Request) {
     await supabase.from('posts_log').update({ extracted_content: content }).eq('id', draftId)
   }
 
+  console.log('[retry] generating posts draftId=%s contentLen=%d', draftId, content.length)
+
   const posts = await generateAllPosts(content).catch(async (err: Error) => {
+    console.error('[retry] generation failed draftId=%s:', draftId, err.message)
     await supabase.from('posts_log').update({ status: 'failed', error_message: err.message }).eq('id', draftId)
     return null
   })

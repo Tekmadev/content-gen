@@ -1,12 +1,9 @@
-export type SourceType = 'youtube' | 'article' | 'email' | 'pdf'
-
-// Blotato uses 'text' instead of 'email' — mapped in the API route
-type BlotatoSourceType = 'youtube' | 'article' | 'pdf' | 'text'
+export type SourceType = 'youtube' | 'tiktok' | 'instagram' | 'article' | 'email' | 'pdf'
 
 export interface SourceInput {
-  sourceType: SourceType | BlotatoSourceType
-  url?: string       // for youtube, article, pdf
-  text?: string      // for email/text
+  sourceType: SourceType | 'text'   // 'text' is the internal alias for 'email'
+  url?: string                       // for youtube, tiktok, instagram, article, pdf
+  text?: string                      // for email/text
 }
 
 export interface ExtractedContent {

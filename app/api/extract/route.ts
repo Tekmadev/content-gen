@@ -1,14 +1,25 @@
+/**
+ * POST /api/extract
+ *
+ * Creates a draft, deducts credits, then extracts content from the source.
+ * Extraction is handled by lib/extractor.ts (Supadata + Gemini — no Blotato dependency).
+ *
+ * Supported sourceTypes: youtube, tiktok, instagram, article, pdf, email
+ */
+
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { extractContent } from '@/lib/blotato'
-import { getUserProfile, getBlotatoKey, checkAndDeductCredits, trackEvent, CREDIT_COSTS } from '@/lib/user-profile'
+import { extractContent } from '@/lib/extractor'
+import { checkAndDeductCredits, trackEvent, CREDIT_COSTS } from '@/lib/user-profile'
+import { getPlatformConfig } from '@/lib/platform-config'
 import type { SourceInput } from '@/lib/types'
 
 export const maxDuration = 60
 
 const BUCKET = 'Content'
 
-async function uploadPdf(
+// Store a copy of PDF files in Supabase Storage so the user can re-download them
+async function archivePdf(
   supabase: Awaited<ReturnType<typeof createClient>>,
   pdfUrl: string,
   userId: string,
@@ -19,11 +30,9 @@ async function uploadPdf(
     if (!res.ok) return null
     const buffer = Buffer.from(await res.arrayBuffer())
     const storagePath = `${userId}/${draftId}/source.pdf`
-
     const { error } = await supabase.storage
       .from(BUCKET)
       .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true })
-
     if (error) return null
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath)
     return data.publicUrl
@@ -43,7 +52,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'sourceType is required' }, { status: 400 })
   }
 
-  // Create draft record first so we have a draftId to associate with the credit transaction
+  // Create draft first so we can link the credit transaction to it
   const { data: draft, error: dbError } = await supabase
     .from('posts_log')
     .insert({
@@ -59,39 +68,40 @@ export async function POST(request: Request) {
 
   if (dbError) {
     return NextResponse.json(
-      { error: `Database error: ${dbError.message} — Have you run supabase/schema.sql?` },
+      { error: `Database error: ${dbError.message}` },
       { status: 500 }
     )
   }
 
-  // Check credits + deduct (links transaction to this draft)
-  const usageError = await checkAndDeductCredits(user.id, CREDIT_COSTS.post_gen, 'post_gen', draft.id)
+  // Read live credit cost from platform_config; fall back to static
+  const { credit_costs } = await getPlatformConfig()
+  const cost = credit_costs.post_gen ?? CREDIT_COSTS.post_gen
+
+  const usageError = await checkAndDeductCredits(user.id, cost, 'post_gen', draft.id)
   if (usageError) {
-    // Roll back draft status so it doesn't clutter the UI
-    await supabase.from('posts_log').update({ status: 'failed', error_message: usageError }).eq('id', draft.id)
+    await supabase
+      .from('posts_log')
+      .update({ status: 'failed', error_message: usageError })
+      .eq('id', draft.id)
     return NextResponse.json({ error: usageError }, { status: 402 })
   }
 
-  const profile = await getUserProfile(user.id)
-  const blotatoKey = getBlotatoKey(profile)
-
-  // Map 'email' to Blotato's 'text' sourceType
-  const blotatoSource: SourceInput = {
-    ...body,
-    sourceType: body.sourceType === 'email' ? ('text' as SourceInput['sourceType']) : body.sourceType,
-  }
-
-  // If PDF, download and store it in Supabase Storage
+  // Archive PDF to Supabase Storage (fire-and-forget — don't block extraction)
   if (body.sourceType === 'pdf' && body.url) {
-    const storedPdfUrl = await uploadPdf(supabase, body.url, user.id, draft.id)
-    if (storedPdfUrl) {
-      await supabase.from('posts_log').update({ source_file_url: storedPdfUrl }).eq('id', draft.id)
-    }
+    archivePdf(supabase, body.url, user.id, draft.id).then((storedUrl) => {
+      if (storedUrl) {
+        supabase.from('posts_log').update({ source_file_url: storedUrl }).eq('id', draft.id)
+      }
+    })
   }
 
+  console.log('[extract] start sourceType=%s draftId=%s userId=%s', body.sourceType, draft.id, user.id)
+
+  // Extract content (Supadata for URLs, Gemini for PDFs, passthrough for text)
   let extractionError = ''
-  const extracted = await extractContent(blotatoSource, blotatoKey).catch(async (err: Error) => {
+  const extracted = await extractContent(body).catch(async (err: Error) => {
     extractionError = err.message
+    console.error('[extract] failed sourceType=%s draftId=%s:', body.sourceType, draft.id, err.message)
     await supabase
       .from('posts_log')
       .update({ status: 'failed', error_message: err.message })
@@ -100,16 +110,20 @@ export async function POST(request: Request) {
   })
 
   if (!extracted) {
-    return NextResponse.json({ error: `Blotato extraction failed: ${extractionError}` }, { status: 500 })
+    return NextResponse.json(
+      { error: `Content extraction failed: ${extractionError}` },
+      { status: 500 }
+    )
   }
 
-  const contentText = extracted.content ?? extracted.title ?? ''
+  const contentText = extracted.content || extracted.title || ''
+  console.log('[extract] ok — %d chars draftId=%s', contentText.length, draft.id)
+
   await supabase
     .from('posts_log')
     .update({ extracted_content: contentText })
     .eq('id', draft.id)
 
-  // Fire-and-forget analytics event
   trackEvent(user.id, 'post_generated', { source_type: body.sourceType, draft_id: draft.id })
 
   return NextResponse.json({ draftId: draft.id, content: contentText })
