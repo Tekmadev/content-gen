@@ -74,6 +74,17 @@ export default function BrandPage() {
 
   // Called when chat signals completion — triggers generation
   const handleChatComplete = useCallback(async (history: ChatMessage[], images: string[]) => {
+    // ⚡ Persist chat history IMMEDIATELY to state + DB before generation starts.
+    // This ensures "Try again" restores the full conversation even if generation fails.
+    const withHistory = { ...EMPTY_BRIEF, chat_history: history, reference_images: images }
+    setBrief(withHistory)
+    // Fire-and-forget save (don't await — generation can start in parallel)
+    fetch('/api/brand-brief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(withHistory),
+    }).catch(() => {}) // non-fatal
+
     setPageState('generating')
     setGenerateError('')
     try {

@@ -16,18 +16,52 @@ function getHeaders() {
   }
 }
 
-async function callGemini(model: string, prompt: string): Promise<string> {
+async function callGemini(model: string, prompt: string, maxTokens = 8192): Promise<string> {
   const res = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 4096 },
+      generationConfig: { temperature: 0.4, maxOutputTokens: maxTokens },
     }),
   })
-  if (!res.ok) throw new Error(`Gemini error: ${await res.text()}`)
+  if (!res.ok) throw new Error(`Gemini error (${res.status}): ${await res.text()}`)
   const data = await res.json()
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+}
+
+/** Robustly parse JSON from Gemini output — handles markdown fences and extra text */
+function extractJson(raw: string): Partial<BrandBrief> {
+  let text = raw.trim()
+
+  // Strategy 1: strip ```json ... ``` fences
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenceMatch) text = fenceMatch[1].trim()
+
+  // Strategy 2: find the first { ... } block if there's surrounding text
+  if (!text.startsWith('{')) {
+    const objMatch = text.match(/\{[\s\S]*\}/)
+    if (objMatch) text = objMatch[0]
+  }
+
+  // Strategy 3: try to fix truncated JSON by closing open structures
+  try {
+    return JSON.parse(text)
+  } catch {
+    // Count unclosed brackets to attempt repair
+    let openBraces = 0, openBrackets = 0
+    for (const ch of text) {
+      if (ch === '{') openBraces++
+      else if (ch === '}') openBraces--
+      else if (ch === '[') openBrackets++
+      else if (ch === ']') openBrackets--
+    }
+    let repaired = text
+    // close any open arrays first, then objects
+    for (let i = 0; i < openBrackets; i++) repaired += ']'
+    for (let i = 0; i < openBraces; i++) repaired += '}'
+    return JSON.parse(repaired)
+  }
 }
 
 // ── POST — extract structured data from chat history + generate brand brief ──
@@ -91,12 +125,23 @@ Return ONLY the JSON. No markdown fences, no commentary.`
 
   let structured: Partial<BrandBrief> = {}
   try {
-    const rawJson = await callGemini(model, extractPrompt)
-    const cleaned = rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    structured = JSON.parse(cleaned)
+    const rawJson = await callGemini(model, extractPrompt, 8192)
+    console.log('[brand-brief/generate] raw extraction length=%d', rawJson.length)
+    structured = extractJson(rawJson)
   } catch (err) {
     console.error('[brand-brief/generate] JSON extraction failed:', err)
-    return NextResponse.json({ error: 'Failed to extract brand data from conversation.' }, { status: 500 })
+    // Save chat history to DB so the user doesn't lose their conversation
+    await supabase.from('brand_briefs').upsert({
+      user_id:         user.id,
+      chat_history,
+      reference_images,
+      chat_completed:  false,
+      updated_at:      new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+    return NextResponse.json(
+      { error: 'Failed to extract brand data from conversation. Your chat history has been saved — click "Try again" to retry.' },
+      { status: 500 }
+    )
   }
 
   // Step 2 — generate the polished markdown brand brief
@@ -144,7 +189,7 @@ A compact table: Brand in 3 words | Tone | Audience | Core message | Never say |
 
 Be specific, vivid, and detailed. Use the actual brand information — do not use placeholders. Write as if this will be handed to a content creator who has never heard of this brand.`
 
-  const generatedBrief = await callGemini(model, briefPrompt)
+  const generatedBrief = await callGemini(model, briefPrompt, 8192)
 
   // Step 3 — save everything to the database
   const now = new Date().toISOString()
