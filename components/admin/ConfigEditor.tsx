@@ -37,7 +37,7 @@ const CLAUDE_MODEL_OPTIONS = [
 const GEMINI_CHAT_MODEL_OPTIONS = [
   'gemini-2.5-flash',        // Stable production — fast multimodal (recommended)
   'gemini-3-flash-preview',  // Latest Gemini 3 (preview, 2026)
-  'gemini-2.0-flash',        // Previous generation
+  // Note: gemini-2.0-flash is deprecated by Google and no longer available to new users
 ]
 
 // ── Gemini image-generation models ────────────────────────────────────────

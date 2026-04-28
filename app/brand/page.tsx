@@ -159,7 +159,7 @@ export default function BrandPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-[var(--foreground)]">Brand — Your Brand Strategist</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Powered by Gemini 2.0 Flash · Takes ~5 minutes</p>
+                <p className="text-xs text-[var(--muted-foreground)]">Powered by Gemini · Takes ~5 minutes</p>
               </div>
               <div className="ml-auto flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AppShell from '@/components/AppShell'
 import UserAvatar from '@/components/UserAvatar'
-import type { BrandSettings } from '@/lib/types'
+import type { BrandSettings, BrandBrief } from '@/lib/types'
+import Link from 'next/link'
 
 // ── Feedback Modal ────────────────────────────────────────────────────────
 
@@ -233,6 +234,10 @@ export default function SettingsPage() {
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileError, setProfileError] = useState('')
 
+  // Brand brief (from AI wizard)
+  const [brief, setBrief] = useState<BrandBrief | null>(null)
+  const [briefLoading, setBriefLoading] = useState(true)
+
   // Brand settings
   const [brand, setBrand] = useState<BrandSettings>(DEFAULT_BRAND)
   const [savingBrand, setSavingBrand] = useState(false)
@@ -267,6 +272,13 @@ export default function SettingsPage() {
       setProfileName(data.user?.user_metadata?.full_name ?? '')
     })
     loadBrandSettings()
+
+    // Load brand brief summary
+    fetch('/api/brand-brief')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: BrandBrief | null) => { if (data?.chat_completed) setBrief(data) })
+      .catch(() => {})
+      .finally(() => setBriefLoading(false))
 
     fetch('/api/accounts')
       .then((r) => r.json())
@@ -542,6 +554,177 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        {/* ── Brand Profile (from AI wizard) ── */}
+        <section className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex flex-col gap-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--muted)]">Brand Profile</h2>
+              <p className="text-xs text-[var(--muted)] mt-1">
+                Your brand identity gathered from the AI brand wizard. Powers all content generation.
+              </p>
+            </div>
+            <Link
+              href="/brand"
+              className="text-xs text-[var(--primary)] hover:underline whitespace-nowrap flex-shrink-0"
+            >
+              {brief ? 'Edit profile →' : 'Build profile →'}
+            </Link>
+          </div>
+
+          {briefLoading ? (
+            <div className="flex items-center gap-2 py-4">
+              <div className="w-4 h-4 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-[var(--muted)]">Loading brand profile…</span>
+            </div>
+          ) : !brief ? (
+            <div className="flex flex-col items-center gap-3 py-8 border-2 border-dashed border-[var(--border)] rounded-xl">
+              <span className="text-3xl">🎨</span>
+              <div className="text-center">
+                <p className="text-sm font-medium text-[var(--foreground)]">No brand profile yet</p>
+                <p className="text-xs text-[var(--muted)] mt-1">Run the brand wizard to build your AI-powered brand identity.</p>
+              </div>
+              <Link
+                href="/brand"
+                className="mt-1 px-4 py-2 bg-[var(--primary)] text-white text-xs font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors"
+              >
+                Start brand wizard
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-5">
+
+              {/* Identity row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { label: 'Business name',   value: brief.business_name },
+                  { label: 'Tagline',         value: brief.tagline },
+                  { label: 'Location',        value: brief.location },
+                  { label: 'Website',         value: brief.website },
+                  { label: 'Founded',         value: brief.founded },
+                  { label: 'Tone of voice',   value: brief.tone_of_voice },
+                ].filter((f) => f.value).map(({ label, value }) => (
+                  <div key={label} className="bg-[var(--surface)] rounded-xl px-4 py-3 border border-[var(--border)]">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-0.5">{label}</p>
+                    <p className="text-sm text-[var(--foreground)] leading-snug">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Mission / description */}
+              {(brief.mission || brief.business_description) && (
+                <div className="bg-[var(--surface)] rounded-xl px-4 py-3 border border-[var(--border)]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-1">
+                    {brief.mission ? 'Mission' : 'What we do'}
+                  </p>
+                  <p className="text-sm text-[var(--foreground)] leading-relaxed">
+                    {brief.mission || brief.business_description}
+                  </p>
+                </div>
+              )}
+
+              {/* Personality + Pillars row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {brief.personality_words?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">Personality</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {brief.personality_words.map((w, i) => (
+                        <span key={i} className="text-xs px-2.5 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20 font-medium">
+                          {w}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {brief.content_pillars?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">Content Pillars</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {brief.content_pillars.map((p, i) => (
+                        <span key={i} className="text-xs px-2.5 py-1 rounded-full bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)]">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Services */}
+              {brief.services?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">Services</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {brief.services.map((svc, i) => (
+                      <div key={i} className="bg-[var(--surface)] rounded-xl px-4 py-3 border border-[var(--border)]">
+                        <p className="text-xs font-semibold text-[var(--foreground)]">{svc.name}</p>
+                        {svc.description && <p className="text-xs text-[var(--muted)] mt-0.5 line-clamp-2">{svc.description}</p>}
+                        {svc.outcome && <p className="text-[11px] text-[var(--primary)] mt-1">→ {svc.outcome}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Always / Never say */}
+              {(brief.always_say?.length > 0 || brief.never_say?.length > 0) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {brief.always_say?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-green-600 mb-2">✓ Always say</p>
+                      <ul className="space-y-1">
+                        {brief.always_say.map((s, i) => (
+                          <li key={i} className="text-xs text-[var(--foreground)] flex items-start gap-1.5">
+                            <span className="text-green-500 mt-0.5">•</span>{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {brief.never_say?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500 mb-2">✕ Never say</p>
+                      <ul className="space-y-1">
+                        {brief.never_say.map((s, i) => (
+                          <li key={i} className="text-xs text-[var(--foreground)] flex items-start gap-1.5">
+                            <span className="text-red-400 mt-0.5">•</span>{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Target audiences */}
+              {brief.audiences?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-2">Target Audiences</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {brief.audiences.map((aud, i) => (
+                      <div key={i} className="bg-[var(--surface)] rounded-xl px-4 py-3 border border-[var(--border)]">
+                        <p className="text-xs font-semibold text-[var(--foreground)]">{aud.name}</p>
+                        {aud.description && <p className="text-xs text-[var(--muted)] mt-0.5 line-clamp-2">{aud.description}</p>}
+                        {aud.pain_points?.length > 0 && (
+                          <p className="text-[11px] text-[var(--muted)] mt-1">Pain: {aud.pain_points.slice(0, 2).join(', ')}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {brief.brief_generated_at && (
+                <p className="text-[11px] text-[var(--muted)] border-t border-[var(--border)] pt-3">
+                  Last generated {new Date(brief.brief_generated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  {' · '}
+                  <Link href="/brand" className="text-[var(--primary)] hover:underline">View full brief →</Link>
+                </p>
+              )}
             </div>
           )}
         </section>

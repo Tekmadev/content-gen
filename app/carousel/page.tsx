@@ -559,7 +559,6 @@ function CarouselStudioContent() {
                       icon: '◈',
                       label: 'Claude SVG',
                       desc: 'Vector graphics — brand-perfect',
-                      badge: 'Tekmadev',
                     },
                     {
                       id: 'canva' as ImageGenerator,
@@ -620,7 +619,7 @@ function CarouselStudioContent() {
                   </div>
                   {imageGenerator === 'claude_svg' && (
                     <p className="text-[11px] text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
-                      ◈ Claude generates pure SVG code for each slide — pixel-perfect brand colors, no AI hallucinations. Ideal for Tekmadev-style precision graphics.
+                      ◈ Claude generates pure SVG code for each slide — pixel-perfect brand colors, no AI hallucinations. Best for precision, brand-consistent graphics.
                     </p>
                   )}
                   {imageGenerator === 'openai' && (
