@@ -115,12 +115,14 @@ function UserDrawer({
 }) {
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
-  const [creditDelta, setCreditDelta] = useState('')
+  const [creditAmount, setCreditAmount] = useState('')
+  const [creditMode, setCreditMode] = useState<'grant' | 'revoke' | 'set'>('grant')
   const [creditNote, setCreditNote] = useState('')
   const [planOverride, setPlanOverride] = useState(user.subscription_plan ?? '')
   const [statusOverride, setStatusOverride] = useState(user.subscription_status ?? '')
 
   const totalCredits = user.subscription_plan ? (PLAN_CREDITS[user.subscription_plan] ?? 0) : 0
+  const available   = Math.max(0, totalCredits - user.credits_used)
   const pct = totalCredits > 0 ? Math.min(100, Math.round((user.credits_used / totalCredits) * 100)) : 0
 
   async function doAction(body: Record<string, unknown>) {
@@ -208,50 +210,180 @@ function UserDrawer({
             ))}
           </div>
 
-          {/* Credit bar */}
-          {totalCredits > 0 && (
-            <div>
-              <div className="flex justify-between text-xs text-[var(--muted)] mb-1">
-                <span>Credits this month</span>
-                <span>{user.credits_used} / {totalCredits} ({pct}%)</span>
+          {/* ── Credit Management ────────────────────────────────────────── */}
+          <div className="border border-[var(--border)] rounded-2xl overflow-hidden">
+            <div className="bg-[var(--primary)]/5 px-4 py-3 border-b border-[var(--border)]">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-[var(--foreground)]">Credit Management</p>
+                {user.subscription_plan && (
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+                    {user.subscription_plan} plan · {totalCredits.toLocaleString()} cr/mo
+                  </span>
+                )}
               </div>
-              <div className="h-2.5 rounded-full bg-[var(--surface)] border border-[var(--border)] overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-orange-400' : 'bg-[var(--primary)]'}`}
-                  style={{ width: `${pct}%` }}
+            </div>
+
+            <div className="p-4 flex flex-col gap-4">
+              {/* Big balance display */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-[var(--surface)] rounded-xl p-3 border border-[var(--border)]">
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Available</p>
+                  <p className={`text-2xl font-bold ${available === 0 ? 'text-red-600' : pct >= 80 ? 'text-orange-500' : 'text-green-600'}`}>
+                    {available.toLocaleString()}
+                  </p>
+                </div>
+                <div className="bg-[var(--surface)] rounded-xl p-3 border border-[var(--border)]">
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Used</p>
+                  <p className="text-2xl font-bold text-[var(--foreground)]">
+                    {user.credits_used.toLocaleString()}
+                  </p>
+                </div>
+                <div className="bg-[var(--surface)] rounded-xl p-3 border border-[var(--border)]">
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Total/mo</p>
+                  <p className="text-2xl font-bold text-[var(--foreground)]">
+                    {totalCredits.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Usage bar */}
+              {totalCredits > 0 && (
+                <div>
+                  <div className="flex justify-between text-xs text-[var(--muted)] mb-1">
+                    <span>This month&apos;s usage</span>
+                    <span>{pct}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-[var(--surface)] border border-[var(--border)] overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-orange-400' : 'bg-[var(--primary)]'}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Quick grant — preset amounts */}
+              <div>
+                <p className="text-xs font-medium text-[var(--foreground)] mb-1.5">Quick grant</p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[10, 50, 100, 500].map((n) => (
+                    <button
+                      key={n}
+                      disabled={loading}
+                      onClick={() => doAction({
+                        action: 'grant_credits',
+                        amount: n,
+                        notes: `quick grant +${n}`,
+                      })}
+                      className="py-1.5 text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      +{n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quick revoke — preset amounts */}
+              <div>
+                <p className="text-xs font-medium text-[var(--foreground)] mb-1.5">Quick revoke</p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[10, 50, 100, 500].map((n) => (
+                    <button
+                      key={n}
+                      disabled={loading || available < n}
+                      onClick={() => doAction({
+                        action: 'revoke_credits',
+                        amount: n,
+                        notes: `quick revoke -${n}`,
+                      })}
+                      title={available < n ? `Only ${available} available` : `Take ${n} credits`}
+                      className="py-1.5 text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      −{n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom amount with mode selector */}
+              <div>
+                <p className="text-xs font-medium text-[var(--foreground)] mb-1.5">Custom amount</p>
+                <div className="flex gap-1 bg-[var(--surface)] rounded-lg p-0.5 mb-2 border border-[var(--border)]">
+                  {([
+                    { id: 'grant',  label: 'Grant',  cls: 'text-green-700' },
+                    { id: 'revoke', label: 'Revoke', cls: 'text-red-700' },
+                    { id: 'set',    label: 'Set used to', cls: 'text-[var(--foreground)]' },
+                  ] as const).map(({ id, label, cls }) => (
+                    <button
+                      key={id}
+                      onClick={() => setCreditMode(id)}
+                      className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        creditMode === id
+                          ? `bg-white shadow-sm ${cls}`
+                          : 'text-[var(--muted)] hover:text-[var(--foreground)]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={creditMode === 'set' ? 0 : 1}
+                    placeholder={
+                      creditMode === 'grant'  ? 'How many to give'
+                      : creditMode === 'revoke' ? 'How many to take'
+                      : 'New credits_used value'
+                    }
+                    value={creditAmount}
+                    onChange={(e) => setCreditAmount(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  />
+                  <button
+                    disabled={loading || !creditAmount}
+                    onClick={() => {
+                      const num = Number(creditAmount)
+                      if (creditMode === 'grant') {
+                        doAction({ action: 'grant_credits', amount: num, notes: creditNote || `granted ${num}` })
+                      } else if (creditMode === 'revoke') {
+                        doAction({ action: 'revoke_credits', amount: num, notes: creditNote || `revoked ${num}` })
+                      } else {
+                        doAction({ action: 'set_credits_used', value: num, notes: creditNote || `set to ${num}` })
+                      }
+                      setCreditAmount('')
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
+                      creditMode === 'grant'  ? 'bg-green-600 hover:bg-green-700' :
+                      creditMode === 'revoke' ? 'bg-red-600 hover:bg-red-700' :
+                      'bg-[var(--primary)] hover:bg-[var(--primary-hover)]'
+                    }`}
+                  >
+                    {creditMode === 'grant' ? 'Grant' : creditMode === 'revoke' ? 'Revoke' : 'Set'}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Reason / note (optional, logged in audit trail)"
+                  value={creditNote}
+                  onChange={(e) => setCreditNote(e.target.value)}
+                  className="mt-2 w-full px-3 py-1.5 border border-[var(--border)] rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                 />
               </div>
-            </div>
-          )}
 
-          <hr className="border-[var(--border)]" />
-
-          {/* ── Adjust credits ── */}
-          <div>
-            <p className="text-sm font-semibold mb-2">Adjust credits</p>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                placeholder="+10 or -5"
-                value={creditDelta}
-                onChange={e => setCreditDelta(e.target.value)}
-                className="flex-1 px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-              />
+              {/* Reset button */}
               <button
-                disabled={loading || !creditDelta}
-                onClick={() => doAction({ action: 'adjust_credits', amount: Number(creditDelta), notes: creditNote })}
-                className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                disabled={loading || user.credits_used === 0}
+                onClick={() => {
+                  if (confirm(`Reset ${user.email}'s monthly usage to 0? They'll have full ${totalCredits.toLocaleString()} credits available again this month.`)) {
+                    doAction({ action: 'reset_credits', notes: creditNote || 'manual reset' })
+                  }
+                }}
+                className="w-full py-2 text-xs font-medium text-[var(--primary)] border border-dashed border-[var(--primary)]/40 hover:bg-[var(--primary)]/5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Apply
+                ↺ Reset monthly usage to 0 (full refresh)
               </button>
             </div>
-            <input
-              type="text"
-              placeholder="Note (optional)"
-              value={creditNote}
-              onChange={e => setCreditNote(e.target.value)}
-              className="mt-2 w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            />
           </div>
 
           {/* ── Override plan/status ── */}
