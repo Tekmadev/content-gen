@@ -56,7 +56,7 @@ export async function POST(request: Request) {
         if (isNewSub || oldPlan === null) {
           subEventType = sub.status === 'trialing' ? 'trial_started' : 'subscribed'
         } else if (oldPlan && newPlan && oldPlan !== newPlan) {
-          const planOrder = ['starter', 'pro', 'agency']
+          const planOrder = ['starter', 'creator', 'pro', 'agency']
           subEventType = planOrder.indexOf(newPlan) > planOrder.indexOf(oldPlan)
             ? 'upgraded'
             : 'downgraded'

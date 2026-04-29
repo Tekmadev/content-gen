@@ -65,7 +65,7 @@ interface AdminUser {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const PLAN_CREDITS: Record<string, number> = { starter: 60, pro: 250, agency: 1000 }
+const PLAN_CREDITS: Record<string, number> = { starter: 120, creator: 350, pro: 800, agency: 2200 }
 const PIE_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6']
 
 const STATUS_BADGE: Record<string, string> = {
@@ -265,6 +265,7 @@ function UserDrawer({
               >
                 <option value="">No plan</option>
                 <option value="starter">Starter</option>
+                <option value="creator">Creator</option>
                 <option value="pro">Pro</option>
                 <option value="agency">Agency</option>
               </select>

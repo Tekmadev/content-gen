@@ -62,10 +62,12 @@ export async function GET() {
   const totalMrr = mrr?.reduce((s, r) => s + (r.mrr_cad_cents ?? 0), 0) ?? 0
 
   // Plan breakdown
+  const isActive = (s: string | null) => s === 'active' || s === 'trialing'
   const planBreakdown = {
-    starter: profiles?.filter(p => p.subscription_plan === 'starter' && (p.subscription_status === 'active' || p.subscription_status === 'trialing')).length ?? 0,
-    pro:     profiles?.filter(p => p.subscription_plan === 'pro'     && (p.subscription_status === 'active' || p.subscription_status === 'trialing')).length ?? 0,
-    agency:  profiles?.filter(p => p.subscription_plan === 'agency'  && (p.subscription_status === 'active' || p.subscription_status === 'trialing')).length ?? 0,
+    starter: profiles?.filter(p => p.subscription_plan === 'starter' && isActive(p.subscription_status)).length ?? 0,
+    creator: profiles?.filter(p => p.subscription_plan === 'creator' && isActive(p.subscription_status)).length ?? 0,
+    pro:     profiles?.filter(p => p.subscription_plan === 'pro'     && isActive(p.subscription_status)).length ?? 0,
+    agency:  profiles?.filter(p => p.subscription_plan === 'agency'  && isActive(p.subscription_status)).length ?? 0,
   }
 
   // Credit usage by type (last 30 days) → for pie chart
