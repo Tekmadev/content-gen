@@ -50,36 +50,47 @@ export default function DashboardPage() {
   const recentPostsRef = useRef<PostDraft[]>([])
   recentPostsRef.current = recentPosts
 
-  const fetchRecentPosts = useCallback(async () => {
+  // Stop polling after repeated failures to avoid spamming a dead/disconnected server
+  const failCountRef = useRef(0)
+  const MAX_CONSECUTIVE_FAILURES = 3
+
+  const fetchRecentPosts = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/posts?limit=5')
+      const res = await fetch('/api/posts?limit=5', { signal })
       if (!res.ok) return
       const data: PostDraft[] = await res.json()
-      // Skip update if signature unchanged — prevents render churn during polling
       const sig = (arr: PostDraft[]) =>
         arr.map((p) => `${p.id}:${p.status}:${p.linkedin_url ?? ''}:${p.instagram_url ?? ''}:${p.x_url ?? ''}`).join('|')
       if (sig(data) !== sig(recentPostsRef.current)) {
         setRecentPosts(data)
       }
+      failCountRef.current = 0
     } catch (err) {
-      console.error('[dashboard] fetchRecentPosts failed:', err)
+      if (err instanceof Error && err.name === 'AbortError') return
+      failCountRef.current += 1
+      if (failCountRef.current <= MAX_CONSECUTIVE_FAILURES) {
+        console.warn('[dashboard] fetchRecentPosts failed (will retry):', err)
+      }
     }
   }, [])
 
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/stats')
+      const res = await fetch('/api/stats', { signal })
       if (res.ok) setStats(await res.json())
     } catch (err) {
-      console.error('[dashboard] fetchStats failed:', err)
+      if (err instanceof Error && err.name === 'AbortError') return
+      // stats failures are non-critical, just warn
+      console.warn('[dashboard] fetchStats failed:', err)
     }
   }, [])
 
   useEffect(() => {
+    const ac = new AbortController()
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    fetchRecentPosts()
-    fetchStats()
-    fetch('/api/profile')
+    fetchRecentPosts(ac.signal)
+    fetchStats(ac.signal)
+    fetch('/api/profile', { signal: ac.signal })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data?.profile && data?.totalCredits) {
@@ -90,13 +101,15 @@ export default function DashboardPage() {
           })
         }
       })
-      .catch(() => {})
+      .catch(() => {}) // includes abort
+    return () => ac.abort()
   }, [fetchRecentPosts, fetchStats, supabase.auth])
 
   // Polling — set up ONCE on mount, runs every 3s, fetches only if there's an active post.
-  // Reading from `recentPostsRef.current` (not state) so the effect never re-mounts.
+  // Stops if too many consecutive failures (dead server).
   useEffect(() => {
     const id = setInterval(() => {
+      if (failCountRef.current >= MAX_CONSECUTIVE_FAILURES) return
       const hasActive = recentPostsRef.current.some(
         (p) => p.status === 'generating' || p.status === 'publishing'
       )

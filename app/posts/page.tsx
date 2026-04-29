@@ -39,41 +39,54 @@ export default function PostsPage() {
   const [sort, setSort] = useState<SortKey>('newest')
 
   // Ref mirror of `posts` so the polling effect can read latest without re-mounting.
-  // Without this, the effect re-runs every fetch (because `posts` changes), which
-  // clears + resets the interval on every render — causing a tight refresh loop
-  // when combined with strict-mode double-invokes or other re-renders.
   const postsRef = useRef<PostDraft[]>([])
   postsRef.current = posts
 
-  const fetchPosts = useCallback(async () => {
+  // Tracks consecutive fetch failures — if too many, stop polling to avoid spamming a
+  // dead server (which lights up the Next.js dev overlay with "Failed to fetch" errors).
+  const failCountRef = useRef(0)
+  const MAX_CONSECUTIVE_FAILURES = 3
+
+  const fetchPosts = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/posts')
+      const res = await fetch('/api/posts', { signal })
       if (!res.ok) return
       const data: PostDraft[] = await res.json()
       // Only update state if the data actually changed — avoids unnecessary re-renders
-      // (compare by id+status+updated fields, not deep equality of large objects).
       const sig = (arr: PostDraft[]) =>
         arr.map((p) => `${p.id}:${p.status}:${p.linkedin_url ?? ''}:${p.instagram_url ?? ''}:${p.x_url ?? ''}`).join('|')
       if (sig(data) !== sig(postsRef.current)) {
         setPosts(data)
       }
+      failCountRef.current = 0  // reset on success
     } catch (err) {
-      console.error('[posts] fetch failed:', err)
+      // AbortError is expected on unmount/HMR — don't surface it.
+      if (err instanceof Error && err.name === 'AbortError') return
+      // Use console.warn (not error) so the Next.js dev overlay doesn't pop up
+      // for transient network blips.
+      failCountRef.current += 1
+      if (failCountRef.current <= MAX_CONSECUTIVE_FAILURES) {
+        console.warn('[posts] fetch failed (will retry):', err)
+      }
     } finally {
       setLoading(false)
     }
   }, [])
 
-  // Initial load — once
+  // Initial load — once. AbortController cleans up any in-flight fetch on unmount.
   useEffect(() => {
+    const ac = new AbortController()
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    fetchPosts()
+    fetchPosts(ac.signal)
+    return () => ac.abort()
   }, [fetchPosts, supabase])
 
-  // Polling — set up ONCE on mount, runs every 3s, fetches only if there's an active post.
-  // Reading from `postsRef.current` (not `posts` state) so the effect never re-mounts.
+  // Polling — set up ONCE on mount, runs every 3s, fetches only if there's an active
+  // post AND we haven't hit the failure ceiling. Reads from postsRef so the effect
+  // never re-mounts (and the interval doesn't churn).
   useEffect(() => {
     const id = setInterval(() => {
+      if (failCountRef.current >= MAX_CONSECUTIVE_FAILURES) return
       const hasActive = postsRef.current.some(
         (p) => p.status === 'generating' || p.status === 'publishing'
       )
