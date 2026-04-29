@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell'
 import BrandChat from '@/components/BrandChat'
 import BrandBriefDisplay from '@/components/BrandBriefDisplay'
 import BrandStyleSection from '@/components/BrandStyleSection'
+import PostingPlatformSection from '@/components/PostingPlatformSection'
 import type { BrandBrief, ChatMessage } from '@/lib/types'
 
 type PageState = 'loading' | 'chat' | 'generating' | 'ready' | 'error'
@@ -244,10 +245,17 @@ export default function BrandPage() {
           />
         )}
 
+        {/* Posting Platform — Starter tier picks 1 of 3 here, other tiers
+            see a confirmation card. Enforced server-side in /api/generate
+            and /api/publish. */}
+        <div className="mt-8">
+          <PostingPlatformSection />
+        </div>
+
         {/* Brand Style — visual identity for AI-generated images.
             Always visible (any state) so users can configure their style
             before, during, or after the brand chat. Persists to brand_settings. */}
-        <div className="mt-8">
+        <div className="mt-6">
           <BrandStyleSection />
         </div>
       </div>

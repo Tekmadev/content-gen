@@ -177,11 +177,26 @@ Write the X post now. Output only the post text, nothing else. Must be under 280
   return (message.content[0] as { text: string }).text.trim()
 }
 
-export async function generateAllPosts(extractedContent: string, brandBriefContext?: string | null) {
+/**
+ * Generate posts for the given list of platforms (defaults to all 3).
+ * Platforms not in the list get an empty string — Claude is never called for them.
+ *
+ * Pass a subset like ['linkedin'] for Starter-tier users to save 2/3 of the API
+ * spend on each generation.
+ */
+export async function generateAllPosts(
+  extractedContent: string,
+  brandBriefContext?: string | null,
+  platforms: ('linkedin' | 'instagram' | 'x')[] = ['linkedin', 'instagram', 'x']
+) {
+  const wantsLinkedIn  = platforms.includes('linkedin')
+  const wantsInstagram = platforms.includes('instagram')
+  const wantsX         = platforms.includes('x')
+
   const [linkedin, instagram, x] = await Promise.all([
-    generateLinkedInPost(extractedContent, brandBriefContext),
-    generateInstagramPost(extractedContent, brandBriefContext),
-    generateXPost(extractedContent, brandBriefContext),
+    wantsLinkedIn  ? generateLinkedInPost(extractedContent,  brandBriefContext) : Promise.resolve(''),
+    wantsInstagram ? generateInstagramPost(extractedContent, brandBriefContext) : Promise.resolve(''),
+    wantsX         ? generateXPost(extractedContent,         brandBriefContext) : Promise.resolve(''),
   ])
   return { linkedin, instagram, x }
 }

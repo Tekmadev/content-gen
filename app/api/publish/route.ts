@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { publishPost, pollPost } from '@/lib/blotato'
 import { getUserProfile, getBlotatoKey, recordPostPublished, trackEvent } from '@/lib/user-profile'
+import { getAllowedPlatforms, filterToAllowedPlatforms, isPlatformRestricted, PLATFORM_LABELS } from '@/lib/platform-restriction'
 
 export const maxDuration = 60
 import { appendLog } from '@/lib/posts-log'
@@ -29,14 +30,39 @@ export async function POST(request: Request) {
   const profile = await getUserProfile(user.id)
   const blotatoKey = getBlotatoKey(profile)
 
+  // ── Platform restriction (Starter tier) ─────────────────────────────
+  // Block publishes to platforms the user's plan doesn't allow.
+  // For Starter, only their chosen platform (linkedin/instagram/x) goes through.
+  const allowedSet = new Set(getAllowedPlatforms(profile))
+  const requestedPlatforms = Object.keys(platforms ?? {}) as ('linkedin' | 'instagram' | 'x')[]
+  const blocked = requestedPlatforms.filter((p) => !allowedSet.has(p))
+
+  if (blocked.length > 0 && isPlatformRestricted(profile)) {
+    const blockedLabels = blocked.map((p) => PLATFORM_LABELS[p]).join(', ')
+    const allowedLabels = [...allowedSet].map((p) => PLATFORM_LABELS[p]).join(', ')
+    return NextResponse.json(
+      {
+        error: `Your Starter plan only allows publishing to ${allowedLabels}. Upgrade to Creator to unlock ${blockedLabels}.`,
+        blocked,
+        allowed: [...allowedSet],
+        upgradeUrl: '/billing',
+      },
+      { status: 403 }
+    )
+  }
+
+  // Strip any disallowed platforms from the request (defensive — shouldn't hit
+  // due to the early return above, but keeps the rest of the handler safe).
+  const safePlatforms = filterToAllowedPlatforms(profile, platforms)
+
   await supabase.from('posts_log').update({ status: 'publishing' }).eq('id', draftId)
 
   const results: Record<string, { submissionId?: string; url?: string; error?: string }> = {}
 
   // Publish to each platform in parallel
   await Promise.all([
-    platforms.linkedin && (async () => {
-      const { accountId, pageId, text, visualUrl } = platforms.linkedin!
+    safePlatforms.linkedin && (async () => {
+      const { accountId, pageId, text, visualUrl } = safePlatforms.linkedin!
       const submissionId = await publishPost({
         platform: 'linkedin',
         accountId,
@@ -54,8 +80,8 @@ export async function POST(request: Request) {
       }
     })(),
 
-    platforms.instagram && (async () => {
-      const { accountId, text, visualUrl } = platforms.instagram!
+    safePlatforms.instagram && (async () => {
+      const { accountId, text, visualUrl } = safePlatforms.instagram!
       const submissionId = await publishPost({
         platform: 'instagram',
         accountId,
@@ -74,8 +100,8 @@ export async function POST(request: Request) {
       }
     })(),
 
-    platforms.x && (async () => {
-      const { accountId, text, visualUrl } = platforms.x!
+    safePlatforms.x && (async () => {
+      const { accountId, text, visualUrl } = safePlatforms.x!
       const submissionId = await publishPost({
         platform: 'twitter',
         accountId,

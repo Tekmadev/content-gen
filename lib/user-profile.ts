@@ -9,6 +9,7 @@ export interface UserProfile {
   blotato_api_key: string | null
   stripe_customer_id: string | null
   subscription_plan: 'starter' | 'creator' | 'pro' | 'agency' | null
+  starter_platform: 'linkedin' | 'instagram' | 'x' | null
   subscription_status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | null
   subscription_period_end: string | null
   credits_used: number
