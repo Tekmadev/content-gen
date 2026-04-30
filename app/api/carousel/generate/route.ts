@@ -312,20 +312,26 @@ export async function POST(request: Request) {
       }
     }
 
-    // Save to history (non-fatal)
-    supabase.from('carousel_jobs').insert({
-      user_id: user.id,
-      job_id: jobId,
-      mode: viralMode ? 'viral' : 'standard',
-      style: style ?? 'viral',
-      aspect_ratio: aspectRatio ?? '3:4',
+    // Save to history. Awaiting so any schema/RLS error surfaces in the response
+    // instead of silently failing in a fire-and-forget .then() — that's how this
+    // bug existed for a while and history showed empty even after generations.
+    const { error: historySaveError } = await supabase.from('carousel_jobs').insert({
+      user_id:         user.id,
+      job_id:          jobId,
+      mode:            viralMode ? 'viral' : 'standard',
+      style:           style ?? 'viral',
+      aspect_ratio:    aspectRatio ?? '3:4',
       image_generator: imageGenerator ?? 'gemini',
-      caption: caption ?? null,
-      slides: uploadedSlides,
+      caption:         caption ?? null,
+      slides:          uploadedSlides,
       content_preview: content.slice(0, 200),
-    }).then(({ error }) => {
-      if (error) console.error('[carousel] History save failed:', error.message)
+      num_slides:      uploadedSlides.length,
     })
+    if (historySaveError) {
+      // Don't fail the user-facing request — the slides are already generated
+      // and uploaded. Just log loudly so the issue is visible.
+      console.error('[carousel] History save failed:', historySaveError.message, historySaveError)
+    }
 
     trackEvent(user.id, 'carousel_generated', {
       draft_id: draftId,
