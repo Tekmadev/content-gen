@@ -8,7 +8,13 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('carousel_jobs')
-    .select('id, job_id, created_at, mode, style, aspect_ratio, image_generator, caption, slides, content_preview')
+    .select(`
+      id, job_id, created_at, mode, viral_mode, platform, style, aspect_ratio,
+      image_generator, caption, slides, content_preview, full_content,
+      num_slides, additional_info, aim_image_url, include_logo, density,
+      canva_template_id, credits_used, generation_duration_ms,
+      storage_error_count
+    `)
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(50)

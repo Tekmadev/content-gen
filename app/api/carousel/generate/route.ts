@@ -100,6 +100,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Invalid platform: ${effectivePlatform}` }, { status: 400 })
   }
 
+  const startedAt = Date.now()
+
   try {
     // Deduct credits (carousel = 8 credits)
     const usageError = await checkAndDeductCredits(user.id, CREDIT_COSTS.carousel, 'carousel', draftId)
@@ -122,6 +124,27 @@ export async function POST(request: Request) {
 
     const adminSupabase = createAdminClient()
     const jobId = crypto.randomUUID()
+
+    // ── Persist AIM reference image to storage (so we can audit it later) ──
+    // We never store base64 in the DB — it bloats rows and breaks indexes.
+    let aimImageUrl: string | null = null
+    if (aimImageBase64 && aimImageMime) {
+      try {
+        const ext = aimImageMime === 'image/png' ? 'png' : aimImageMime === 'image/webp' ? 'webp' : 'jpg'
+        const aimPath = `${user.id}/carousel/${jobId}/aim_reference.${ext}`
+        const aimBuffer = Buffer.from(aimImageBase64, 'base64')
+        const { error: aimUploadErr } = await adminSupabase.storage
+          .from('Content')
+          .upload(aimPath, aimBuffer, { contentType: aimImageMime, upsert: true })
+        if (!aimUploadErr) {
+          aimImageUrl = adminSupabase.storage.from('Content').getPublicUrl(aimPath).data.publicUrl
+        } else {
+          console.error('[carousel] AIM image upload failed:', aimUploadErr.message)
+        }
+      } catch (err) {
+        console.error('[carousel] AIM image persist error:', err)
+      }
+    }
 
     type UploadedSlide = CarouselSlide & { label?: string; body?: string; fallbackBase64?: string; fallbackMime?: string }
     const uploadedSlides: UploadedSlide[] = []
@@ -319,26 +342,43 @@ export async function POST(request: Request) {
     // instead of silently failing in a fire-and-forget .then() — that's how this
     // bug existed for a while and history showed empty even after generations.
     // Use admin client to bypass RLS edge cases (user_id is set explicitly).
+    const generationDurationMs = Date.now() - startedAt
     const { error: historySaveError } = await adminSupabase.from('carousel_jobs').insert({
-      user_id:         user.id,
-      draft_id:        draftId ?? null,
-      platform:        effectivePlatform,             // NOT NULL in schema
-      job_id:          jobId,
-      mode:            viralMode ? 'viral' : 'standard',
-      style:           style ?? 'viral',
-      aspect_ratio:    aspectRatio ?? '3:4',
-      image_generator: imageGenerator ?? 'gemini',
-      caption:         caption ?? null,
-      slides:          uploadedSlides,
-      content_preview: content.slice(0, 200),
-      num_slides:      uploadedSlides.length,
+      user_id:                user.id,
+      draft_id:               draftId ?? null,
+      platform:               effectivePlatform,             // NOT NULL in schema
+      job_id:                 jobId,
+      mode:                   viralMode ? 'viral' : 'standard',
+      viral_mode:             !!viralMode,
+      style:                  style ?? 'viral',
+      aspect_ratio:           aspectRatio ?? '3:4',
+      image_generator:        imageGenerator ?? 'gemini',
+      caption:                caption ?? null,
+      slides:                 uploadedSlides,
+      content_preview:        content.slice(0, 200),
+      full_content:           content,                       // store the whole prompt
+      num_slides:             uploadedSlides.length,
+      additional_info:        additionalInfo ?? null,
+      aim_image_url:          aimImageUrl,
+      include_logo:           includeLogo ?? null,
+      density:                density ?? null,
+      canva_template_id:      canvaTemplateId ?? null,
+      brand_override:         brandOverride ?? null,
+      credits_used:           CREDIT_COSTS.carousel,
+      generation_duration_ms: generationDurationMs,
+      storage_error_count:    storageErrors.length,
+      storage_errors:         storageErrors.length > 0 ? storageErrors : null,
     })
     if (historySaveError) {
       // Don't fail the user-facing request — the slides are already generated
       // and uploaded. Just log loudly so the issue is visible.
       console.error('[carousel] History save failed:', historySaveError.message, historySaveError)
     } else {
-      console.log(`[carousel] History saved: jobId=${jobId} slides=${uploadedSlides.length}`)
+      console.log(
+        `[carousel] History saved: jobId=${jobId} slides=${uploadedSlides.length} ` +
+        `gen=${imageGenerator ?? 'gemini'} mode=${viralMode ? 'viral' : 'standard'} ` +
+        `duration=${generationDurationMs}ms`
+      )
     }
 
     trackEvent(user.id, 'carousel_generated', {

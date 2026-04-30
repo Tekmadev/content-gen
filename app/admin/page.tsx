@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import AppShell from '@/components/AppShell'
 import ConfigEditor from '@/components/admin/ConfigEditor'
+import CarouselJobsTab from '@/components/admin/CarouselJobsTab'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -455,7 +456,7 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'feedback' | 'config'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'carousels' | 'feedback' | 'config'>('overview')
   const [feedback, setFeedback] = useState<FeedbackEntry[]>([])
   const [feedbackSearch, setFeedbackSearch] = useState('')
   const [expandedFeedback, setExpandedFeedback] = useState<string | null>(null)
@@ -551,6 +552,7 @@ export default function AdminPage() {
             {([
               { key: 'overview',  label: 'Overview' },
               { key: 'users',     label: `Users (${users.length})` },
+              { key: 'carousels', label: 'Carousels' },
               { key: 'feedback',  label: `Feedback (${feedback.length})` },
               { key: 'config',    label: '⚙️ Config' },
             ] as const).map(tab => (
@@ -784,6 +786,10 @@ export default function AdminPage() {
               </div>
             </div>
           </>
+        )}
+
+        {activeTab === 'carousels' && (
+          <CarouselJobsTab />
         )}
 
         {activeTab === 'feedback' && (
