@@ -132,7 +132,9 @@ TYPOGRAPHY:
   Headline font: ${headlineFontSize}px, font-weight="800", fill="${text}"
   Body font: ${bodyFontSize}px, font-weight="400", fill="${subtext}"
   Counter: 30px, font-weight="400", fill="${accent}", opacity="0.5"
-  Use: font-family="'Helvetica Neue', Arial, sans-serif"
+  Use: font-family="'DejaVu Sans', 'Liberation Sans', 'Arial', sans-serif"
+  (CRITICAL: do NOT use 'Helvetica Neue' or other macOS-only fonts — they are not
+  installed on the server and will render as empty boxes. The above stack works.)
 
 CONTENT:
   Headline: "${slide.text}"
@@ -160,9 +162,49 @@ Generate the complete, valid SVG now:`
 
 // ── SVG → PNG conversion ─────────────────────────────────────────────────────
 
+/**
+ * Defensive sanitizer: even if Claude ignored our font instructions, force
+ * the SVG to use only fonts that exist on the server (Vercel Linux ships with
+ * DejaVu Sans + Liberation Sans via fontconfig). Replace any specific font
+ * references with the safe stack so text always renders.
+ */
+function sanitizeSvgFonts(svg: string): string {
+  // Replace any font-family attribute or CSS property with the safe stack
+  const safeStack = `'DejaVu Sans', 'Liberation Sans', sans-serif`
+  let out = svg.replace(
+    /font-family\s*=\s*"[^"]*"/gi,
+    `font-family="${safeStack}"`
+  )
+  out = out.replace(
+    /font-family\s*=\s*'[^']*'/gi,
+    `font-family="${safeStack}"`
+  )
+  out = out.replace(
+    /font-family\s*:\s*[^;"}]+/gi,
+    `font-family: ${safeStack}`
+  )
+  return out
+}
+
+/**
+ * Replace common Unicode characters that often render as tofu boxes in
+ * server-side SVG rendering. Keeps text readable but ASCII-safe.
+ */
+function sanitizeTextForSvg(svg: string): string {
+  return svg
+    .replace(/[‘’]/g, "'")    // curly single quotes → straight
+    .replace(/[“”]/g, '"')    // curly double quotes → straight
+    .replace(/[–—]/g, '-')    // en-dash / em-dash → hyphen
+    .replace(/…/g, '...')          // ellipsis → three dots
+    .replace(/ /g, ' ')            // non-breaking space → regular space
+}
+
 async function svgToPng(svgCode: string): Promise<Buffer> {
-  // sharp uses librsvg under the hood — handles SVG natively on Linux/Vercel
-  return sharp(Buffer.from(svgCode, 'utf-8'))
+  // sharp uses librsvg under the hood — handles SVG natively on Linux/Vercel.
+  // We sanitize fonts + text characters to maximize the chance the renderer
+  // can find glyphs for everything (otherwise tofu boxes ▯ appear).
+  const safeSvg = sanitizeTextForSvg(sanitizeSvgFonts(svgCode))
+  return sharp(Buffer.from(safeSvg, 'utf-8'))
     .png({ quality: 95, compressionLevel: 6 })
     .toBuffer()
 }

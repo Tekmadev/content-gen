@@ -940,8 +940,10 @@ function CarouselStudioContent() {
                   </div>
                 </div>
 
-                {/* Slide grid */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Slide grid — responsive: 1 col mobile, 2 tablet, 3+ desktop.
+                    Compact tile rendering so users can see all slides at once
+                    on desktop without scrolling through huge previews. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   {result.slides.map((slide) => (
                     <div key={slide.number} className="bg-white rounded-xl border border-[var(--border)] overflow-hidden flex flex-col">
                       {/* Image */}
@@ -958,8 +960,8 @@ function CarouselStudioContent() {
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-xs text-[var(--muted)]">No image</div>
                         )}
-                        <div className="absolute top-2 left-2 bg-black/60 text-white text-xs font-medium px-2 py-0.5 rounded-full">
-                          {slide.number}/10
+                        <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full">
+                          {slide.number}/{result.slides.length}
                         </div>
                       </div>
 
