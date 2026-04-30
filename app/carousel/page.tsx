@@ -121,6 +121,9 @@ function CarouselStudioContent() {
   const [style, setStyle] = useState<CarouselStyle>('modern')
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4')
   const [numSlides, setNumSlides] = useState<number>(10)
+  // Whether to overlay the user's brand logo on each generated slide.
+  // Defaults to ON when a logo exists; user can opt out per-carousel.
+  const [includeLogo, setIncludeLogo] = useState(true)
 
   // When the generator changes, pick a valid style (Claude SVG only supports infographic)
   useEffect(() => {
@@ -267,6 +270,7 @@ function CarouselStudioContent() {
           canvaTemplateId: imageGenerator === 'canva' ? canvaTemplateId.trim() : undefined,
           style,
           aspectRatio,
+          includeLogo,
         }),
       })
 
@@ -501,6 +505,29 @@ function CarouselStudioContent() {
                 <p className="text-xs text-[var(--muted)]">
                   No brand settings found. <a href="/brand" className="underline text-[var(--primary)]">Set them on the Brand page →</a>
                 </p>
+              )}
+
+              {/* Logo overlay toggle — visible only when a logo is configured */}
+              {brandSettings?.logo_url && (
+                <label className="flex items-center gap-3 px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl cursor-pointer hover:border-[var(--primary)]/40 transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-white border border-[var(--border)] flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <img src={brandSettings.logo_url} alt="Brand logo" className="max-w-full max-h-full object-contain p-0.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-[var(--foreground)]">Place logo on slides</p>
+                    <p className="text-[11px] text-[var(--muted)]">{includeLogo ? 'Logo will appear in the top-right of every slide' : 'Slides will be generated without your logo'}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={includeLogo}
+                    onChange={(e) => setIncludeLogo(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  {/* Toggle switch */}
+                  <span className="relative inline-flex h-6 w-11 items-center rounded-full bg-[var(--border)] transition-colors peer-checked:bg-[var(--primary)] flex-shrink-0">
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${includeLogo ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </span>
+                </label>
               )}
 
               {/* Per-carousel overrides */}

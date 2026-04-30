@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BrandSettings, ImageGenerator } from '@/lib/types'
+import LogoCropModal from './LogoCropModal'
 
 const FONT_OPTIONS = [
   'Inter',
@@ -57,6 +58,10 @@ export default function BrandStyleSection() {
   const [logoError, setLogoError] = useState('')
   const logoInputRef = useRef<HTMLInputElement>(null)
 
+  // Crop modal state — opens after the user picks a file
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
+  const [cropMime, setCropMime] = useState<string>('image/png')
+
   // Load existing brand settings
   useEffect(() => {
     const load = async () => {
@@ -101,12 +106,37 @@ export default function BrandStyleSection() {
     setSaving(false)
   }, [brand])
 
+  // Step 1: user picked a file → open crop modal with it as the source.
+  // Cropping is mandatory — guarantees 1:1 output regardless of input shape.
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setLogoError('')
+
+    // Read file → data URL for the cropper
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string
+      if (!dataUrl) return
+      setCropMime(file.type || 'image/png')
+      setCropSrc(dataUrl)
+    }
+    reader.onerror = () => setLogoError('Could not read file')
+    reader.readAsDataURL(file)
+
+    // Reset the file input so picking the same file again still triggers onChange
+    if (logoInputRef.current) logoInputRef.current.value = ''
+  }
+
+  // Step 2: user confirmed the crop → upload the cropped square Blob
+  const handleCropConfirm = async (blob: Blob) => {
+    setCropSrc(null)
     setLogoUploading(true)
     setLogoError('')
     try {
+      // Pick a sensible filename + extension based on MIME
+      const ext = blob.type === 'image/png' ? 'png' : 'jpg'
+      const file = new File([blob], `logo.${ext}`, { type: blob.type })
       const form = new FormData()
       form.append('logo', file)
       const res = await fetch('/api/brand-settings/logo', { method: 'POST', body: form })
@@ -117,7 +147,6 @@ export default function BrandStyleSection() {
       setLogoError(err instanceof Error ? err.message : 'Upload failed')
     }
     setLogoUploading(false)
-    if (logoInputRef.current) logoInputRef.current.value = ''
   }
 
   const handleLogoRemove = async () => {
@@ -184,8 +213,10 @@ export default function BrandStyleSection() {
                 <img src={brand.logo_url} alt="Brand logo" className="max-w-full max-h-full object-contain p-1" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-[var(--foreground)]">Logo uploaded</p>
-                <p className="text-[11px] text-[var(--muted-foreground)] mt-0.5">Will appear on all carousel slides</p>
+                <p className="text-xs font-medium text-[var(--foreground)]">Logo uploaded (1:1)</p>
+                <p className="text-[11px] text-[var(--muted-foreground)] mt-0.5">
+                  Cropped to square. You can toggle it on/off per carousel.
+                </p>
               </div>
               <div className="flex gap-2 flex-shrink-0">
                 <button
@@ -286,6 +317,18 @@ export default function BrandStyleSection() {
           {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Brand Style'}
         </button>
       </div>
+
+      {/* Logo crop modal — opens after user picks a file. Mandatory 1:1 crop
+          ensures every logo sits cleanly on every slide regardless of source shape. */}
+      {cropSrc && (
+        <LogoCropModal
+          src={cropSrc}
+          mimeType={cropMime}
+          outputSize={512}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropSrc(null)}
+        />
+      )}
     </div>
   )
 }

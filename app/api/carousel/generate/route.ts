@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     brandOverride,
     imageGenerator,
     canvaTemplateId,
+    includeLogo,
   }: {
     content: string
     platform?: CarouselPlatform
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
     brandOverride?: Partial<BrandSettings>
     imageGenerator?: ImageGenerator
     canvaTemplateId?: string
+    includeLogo?: boolean   // user toggle — defaults to true if logo configured
   } = body
 
   // Viral mode: slide count is 4–10, defaults to 10
@@ -134,9 +136,12 @@ export async function POST(request: Request) {
       meta: { type: CarouselSlide['type']; text: string; label?: string; body?: string },
       rawBase64: string
     ) {
-      // Composite brand logo onto slide if configured
-      if (brandSettings?.logo_url) {
-        buffer = await overlayLogo(buffer, brandSettings.logo_url)
+      // Composite brand logo onto slide if user enabled it AND a logo is configured.
+      // Default behavior when includeLogo is undefined: overlay if logo exists
+      // (preserves prior automatic behavior). When explicitly false, skip overlay.
+      const shouldOverlay = (includeLogo ?? true) && !!brandSettings?.logo_url
+      if (shouldOverlay) {
+        buffer = await overlayLogo(buffer, brandSettings!.logo_url!)
         mimeType = 'image/jpeg'  // sharp outputs JPEG
       }
 
