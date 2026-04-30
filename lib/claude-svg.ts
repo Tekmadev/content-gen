@@ -20,10 +20,54 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import sharp from 'sharp'
+import fs from 'node:fs'
+import path from 'node:path'
 import type { ViralSlide, CarouselStyle, BrandSettings } from './types'
 import type { AspectRatio } from './gemini'
 import { CAROUSEL_STYLES } from './carousel-styles'
 import { getPlatformConfig } from './platform-config'
+
+// ── Embedded Inter font (data URI) ───────────────────────────────────────────
+// Vercel's serverless runtime doesn't ship Helvetica/Arial/Inter, and even
+// "DejaVu Sans" / "Liberation Sans" aren't reliably present. So we inline the
+// actual font binary as @font-face data URIs in every SVG. librsvg (sharp's
+// SVG backend) supports loading fonts from base64 data URLs at render time.
+//
+// Cached at module load — read & encode once, reused for every slide.
+
+let _fontFaceBlock: string | null = null
+
+function getInlineFontFaceCss(): string {
+  if (_fontFaceBlock) return _fontFaceBlock
+  try {
+    const fontDir = path.join(process.cwd(), 'node_modules/@fontsource/inter/files')
+    const reg = fs.readFileSync(path.join(fontDir, 'inter-latin-400-normal.woff2')).toString('base64')
+    const bold = fs.readFileSync(path.join(fontDir, 'inter-latin-700-normal.woff2')).toString('base64')
+
+    _fontFaceBlock = `<defs><style type="text/css"><![CDATA[
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  src: url('data:font/woff2;base64,${reg}') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  src: url('data:font/woff2;base64,${bold}') format('woff2');
+}
+text { font-family: 'Inter', sans-serif; }
+]]></style></defs>`
+    return _fontFaceBlock
+  } catch (err) {
+    console.error('[claude-svg] Failed to load Inter font:', err)
+    // Fallback — without embedded fonts, librsvg falls back to whatever
+    // generic sans-serif is available. Better than crashing.
+    _fontFaceBlock = ''
+    return _fontFaceBlock
+  }
+}
 
 // ── Canvas dimensions ────────────────────────────────────────────────────────
 
@@ -77,6 +121,36 @@ function getClient(): Anthropic {
   return new Anthropic({ apiKey })
 }
 
+// ── Design density ───────────────────────────────────────────────────────────
+// Controls how visually rich the generated SVG is. Pure-text SVGs (simple)
+// look clean but plain; rich SVGs add geometric shapes, gradients, depth.
+
+export type DesignDensity = 'simple' | 'medium' | 'rich'
+
+const DENSITY_INSTRUCTIONS: Record<DesignDensity, string> = {
+  simple: `DENSITY: SIMPLE — minimal composition.
+  • Just the headline + body + counter + ONE small accent bar
+  • No additional shapes, gradients, or decorative elements
+  • Maximum negative space — let the text breathe
+  • Editorial / magazine cover aesthetic`,
+
+  medium: `DENSITY: MEDIUM — balanced composition.
+  • Add 2-3 decorative elements that complement the headline:
+    a thin geometric shape (line, dot grid, corner mark, divider, or small offset rectangle)
+    using the accent color at 60-80% opacity
+  • Optional: a soft secondary tint block (10-15% opacity rectangle) behind a portion of the canvas
+  • Keep the text dominant; decorative elements support, never compete`,
+
+  rich: `DENSITY: RICH — bold, layered composition.
+  • Build a layered design with 4-6 visual elements:
+    overlapping geometric shapes, large accent blocks, a gradient overlay,
+    decorative corner marks, possibly a faded number/letter behind the text
+  • Use multiple opacity levels (10%, 30%, 60%) for depth
+  • Add a subtle abstract background pattern (dot grid, thin lines, or geometric pattern)
+    scaled to ~20% opacity so it adds texture without distracting
+  • Text still dominant but design feels editorial / poster-grade`,
+}
+
 // ── Prompt builder ───────────────────────────────────────────────────────────
 
 function buildSvgPrompt(
@@ -84,7 +158,8 @@ function buildSvgPrompt(
   totalSlides: number,
   ratio: AspectRatio,
   style: CarouselStyle,
-  brandSettings?: BrandSettings
+  brandSettings?: BrandSettings,
+  density: DesignDensity = 'medium'
 ): string {
   const dims = CANVAS[ratio] ?? CANVAS['3:4']
   const theme = STYLE_THEMES[style]
@@ -132,9 +207,9 @@ TYPOGRAPHY:
   Headline font: ${headlineFontSize}px, font-weight="800", fill="${text}"
   Body font: ${bodyFontSize}px, font-weight="400", fill="${subtext}"
   Counter: 30px, font-weight="400", fill="${accent}", opacity="0.5"
-  Use: font-family="'DejaVu Sans', 'Liberation Sans', 'Arial', sans-serif"
-  (CRITICAL: do NOT use 'Helvetica Neue' or other macOS-only fonts — they are not
-  installed on the server and will render as empty boxes. The above stack works.)
+  Use: font-family="'Inter', sans-serif"
+  (Inter is embedded as @font-face data URI in every rendered SVG so it's
+  guaranteed to be available — do not use any other font names.)
 
 CONTENT:
   Headline: "${slide.text}"
@@ -156,6 +231,8 @@ DESIGN RULES:
   5. Return ONLY the raw SVG — no markdown fences, no explanation
   6. Must start with <svg and end with </svg>
 
+${DENSITY_INSTRUCTIONS[density]}
+
 ${gradientDef ? `PRE-BUILT GRADIENT DEF TO USE:\n${gradientDef}\n` : ''}
 Generate the complete, valid SVG now:`
 }
@@ -163,27 +240,32 @@ Generate the complete, valid SVG now:`
 // ── SVG → PNG conversion ─────────────────────────────────────────────────────
 
 /**
- * Defensive sanitizer: even if Claude ignored our font instructions, force
- * the SVG to use only fonts that exist on the server (Vercel Linux ships with
- * DejaVu Sans + Liberation Sans via fontconfig). Replace any specific font
- * references with the safe stack so text always renders.
+ * Defensive sanitizer: replace any font-family Claude added with our embedded
+ * font 'Inter'. Combined with getInlineFontFaceCss(), every text element
+ * gets a font that's definitely available — fixing the tofu-box rendering bug.
  */
 function sanitizeSvgFonts(svg: string): string {
-  // Replace any font-family attribute or CSS property with the safe stack
-  const safeStack = `'DejaVu Sans', 'Liberation Sans', sans-serif`
-  let out = svg.replace(
-    /font-family\s*=\s*"[^"]*"/gi,
-    `font-family="${safeStack}"`
-  )
-  out = out.replace(
-    /font-family\s*=\s*'[^']*'/gi,
-    `font-family="${safeStack}"`
-  )
-  out = out.replace(
-    /font-family\s*:\s*[^;"}]+/gi,
-    `font-family: ${safeStack}`
-  )
+  const safeStack = `'Inter', sans-serif`
+  let out = svg.replace(/font-family\s*=\s*"[^"]*"/gi, `font-family="${safeStack}"`)
+  out = out.replace(/font-family\s*=\s*'[^']*'/gi, `font-family="${safeStack}"`)
+  out = out.replace(/font-family\s*:\s*[^;"}]+/gi, `font-family: ${safeStack}`)
   return out
+}
+
+/**
+ * Inject the @font-face <defs> block right after the opening <svg ...> tag.
+ * Idempotent — won't double-inject if the block is already present.
+ */
+function injectFontFace(svg: string): string {
+  const block = getInlineFontFaceCss()
+  if (!block) return svg
+  if (svg.includes('@font-face')) return svg
+
+  // Inject right after the opening <svg ...> tag (handles multi-attr svg tags)
+  const svgOpenMatch = svg.match(/<svg\b[^>]*>/i)
+  if (!svgOpenMatch) return svg
+  const idx = svgOpenMatch.index! + svgOpenMatch[0].length
+  return svg.slice(0, idx) + block + svg.slice(idx)
 }
 
 /**
@@ -200,10 +282,12 @@ function sanitizeTextForSvg(svg: string): string {
 }
 
 async function svgToPng(svgCode: string): Promise<Buffer> {
-  // sharp uses librsvg under the hood — handles SVG natively on Linux/Vercel.
-  // We sanitize fonts + text characters to maximize the chance the renderer
-  // can find glyphs for everything (otherwise tofu boxes ▯ appear).
-  const safeSvg = sanitizeTextForSvg(sanitizeSvgFonts(svgCode))
+  // sharp uses librsvg → Cairo/Pango for SVG text rendering. Vercel's runtime
+  // doesn't reliably ship any specific font, so we inject @font-face data URIs
+  // for Inter (regular + bold). librsvg loads these at render time. This makes
+  // text rendering 100% reliable regardless of what's installed on the server.
+  const withFonts = injectFontFace(svgCode)
+  const safeSvg = sanitizeTextForSvg(sanitizeSvgFonts(withFonts))
   return sharp(Buffer.from(safeSvg, 'utf-8'))
     .png({ quality: 95, compressionLevel: 6 })
     .toBuffer()
@@ -226,7 +310,8 @@ export async function generateSVGSlide(
   totalSlides: number,
   ratio: AspectRatio,
   style: CarouselStyle,
-  brandSettings?: BrandSettings
+  brandSettings?: BrandSettings,
+  density: DesignDensity = 'medium'
 ): Promise<SVGSlideResult> {
   const client = getClient()
   const { models } = await getPlatformConfig()
@@ -234,12 +319,19 @@ export async function generateSVGSlide(
   // Use brand_generate model (good reasoning for code) or fall back
   const model = models.brand_generate ?? 'claude-opus-4-7'
 
+  // Rich density needs more output tokens (more shapes/layers in the SVG)
+  const maxTokensByDensity: Record<DesignDensity, number> = {
+    simple: 2500,
+    medium: 3500,
+    rich:   5000,
+  }
+
   const message = await client.messages.create({
     model,
-    max_tokens: 3000,  // SVG for 10-slide can be verbose
+    max_tokens: maxTokensByDensity[density],
     messages: [{
       role: 'user',
-      content: buildSvgPrompt(slide, totalSlides, ratio, style, brandSettings),
+      content: buildSvgPrompt(slide, totalSlides, ratio, style, brandSettings, density),
     }],
   })
 
@@ -274,7 +366,8 @@ export async function generateViralCarouselSVG(
   slides: ViralSlide[],
   ratio: AspectRatio,
   style: CarouselStyle,
-  brandSettings?: BrandSettings
+  brandSettings?: BrandSettings,
+  density: DesignDensity = 'medium'
 ): Promise<Array<ViralSlide & { base64: string; mimeType: string }>> {
   const CONCURRENCY = 5
   const results: Array<ViralSlide & { base64: string; mimeType: string }> = []
@@ -284,7 +377,7 @@ export async function generateViralCarouselSVG(
     const batch = slides.slice(i, i + CONCURRENCY)
     const batchResults = await Promise.all(
       batch.map(async (slide) => {
-        const result = await generateSVGSlide(slide, slides.length, ratio, style, brandSettings)
+        const result = await generateSVGSlide(slide, slides.length, ratio, style, brandSettings, density)
         return {
           ...slide,
           base64: result.pngBuffer.toString('base64'),

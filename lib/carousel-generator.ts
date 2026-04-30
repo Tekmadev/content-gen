@@ -292,6 +292,8 @@ export interface ViralCarouselConfig {
   brandBriefContext?: string | null
   /** Which image backend to use. Defaults to 'gemini'. Canva is handled in the API route. */
   imageGenerator?: Exclude<ImageGenerator, 'canva'>
+  /** Claude SVG only: how visually rich the design should be. */
+  density?: 'simple' | 'medium' | 'rich'
 }
 
 export interface GeneratedViralSlide extends ViralSlide {
@@ -440,7 +442,7 @@ export async function generateViralCarousel(config: ViralCarouselConfig): Promis
 
   if (backend === 'claude_svg') {
     // ── Claude SVG: code-based, pixel-perfect, brand-accurate ────────────
-    const svgSlides = await generateViralCarouselSVG(slides, ratio, effectiveStyle, config.brandSettings)
+    const svgSlides = await generateViralCarouselSVG(slides, ratio, effectiveStyle, config.brandSettings, config.density ?? 'medium')
     generated = svgSlides as GeneratedViralSlide[]
 
   } else if (backend === 'openai') {

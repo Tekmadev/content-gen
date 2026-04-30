@@ -68,6 +68,7 @@ export async function POST(request: Request) {
     imageGenerator,
     canvaTemplateId,
     includeLogo,
+    density,
   }: {
     content: string
     platform?: CarouselPlatform
@@ -82,7 +83,8 @@ export async function POST(request: Request) {
     brandOverride?: Partial<BrandSettings>
     imageGenerator?: ImageGenerator
     canvaTemplateId?: string
-    includeLogo?: boolean   // user toggle — defaults to true if logo configured
+    includeLogo?: boolean              // toggle — defaults to true if logo configured
+    density?: 'simple' | 'medium' | 'rich'  // Claude SVG: design richness
   } = body
 
   // Viral mode: slide count is 4–10, defaults to 10
@@ -244,6 +246,7 @@ export async function POST(request: Request) {
           brandSettings,
           brandBriefContext,
           imageGenerator: backend,
+          density: density ?? 'medium',
         })
 
         await Promise.all(

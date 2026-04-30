@@ -124,6 +124,9 @@ function CarouselStudioContent() {
   // Whether to overlay the user's brand logo on each generated slide.
   // Defaults to ON when a logo exists; user can opt out per-carousel.
   const [includeLogo, setIncludeLogo] = useState(true)
+  // Claude SVG only: how visually rich the design should be.
+  // simple = mostly text, medium = balanced (default), rich = poster-grade layered
+  const [density, setDensity] = useState<'simple' | 'medium' | 'rich'>('medium')
 
   // When the generator changes, pick a valid style (Claude SVG only supports infographic)
   useEffect(() => {
@@ -271,6 +274,7 @@ function CarouselStudioContent() {
           style,
           aspectRatio,
           includeLogo,
+          density,
         }),
       })
 
@@ -671,9 +675,43 @@ function CarouselStudioContent() {
                     })}
                   </div>
                   {imageGenerator === 'claude_svg' && (
-                    <p className="text-[11px] text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
-                      ◈ Claude generates pure SVG code for each slide — pixel-perfect brand colors, no AI hallucinations. Best for precision, brand-consistent graphics.
-                    </p>
+                    <>
+                      <p className="text-[11px] text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
+                        ◈ Claude generates pure SVG code for each slide — pixel-perfect brand colors, no AI hallucinations. Best for precision, brand-consistent graphics.
+                      </p>
+
+                      {/* Density slider — Claude SVG only */}
+                      <div className="flex flex-col gap-2 border border-[var(--border)] rounded-xl px-3 py-3 bg-white">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-[var(--foreground)]">Design density</label>
+                          <span className="text-[10px] uppercase tracking-wide font-bold text-[var(--primary)]">
+                            {density === 'simple' ? 'Simple' : density === 'medium' ? 'Medium' : 'Rich'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[var(--muted)]">
+                          {density === 'simple'
+                            ? 'Minimal — text + accent bar. Editorial, plenty of negative space.'
+                            : density === 'medium'
+                            ? 'Balanced — text + 2-3 decorative shapes. Most carousels look great here.'
+                            : 'Rich — layered shapes, gradients, depth. Poster-grade design.'}
+                        </p>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {(['simple', 'medium', 'rich'] as const).map((d) => (
+                            <button
+                              key={d}
+                              onClick={() => setDensity(d)}
+                              className={`py-2 px-2 rounded-lg text-xs font-medium transition-all border ${
+                                density === d
+                                  ? 'bg-[var(--primary)] text-white border-[var(--primary)] ring-1 ring-[var(--primary)]'
+                                  : 'bg-white text-[var(--foreground)] border-[var(--border)] hover:border-[var(--primary)]/40 hover:bg-[var(--surface)]'
+                              }`}
+                            >
+                              {d === 'simple' ? '⬤  Simple' : d === 'medium' ? '⬤⬤  Medium' : '⬤⬤⬤  Rich'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   )}
                   {imageGenerator === 'openai' && (
                     <p className="text-[11px] text-[var(--muted)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 leading-relaxed">
