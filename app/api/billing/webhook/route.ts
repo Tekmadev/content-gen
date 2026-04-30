@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getStripe, planFromPriceId, PLANS } from '@/lib/stripe'
+import { getStripe, planFromPriceId, PLANS, CREDIT_PACKS } from '@/lib/stripe'
 import type Stripe from 'stripe'
 
 export const maxDuration = 30
@@ -188,6 +188,53 @@ export async function POST(request: Request) {
             console.log(`[billing/webhook] Payment recovered → user ${profile.user_id}`)
           }
         }
+        break
+      }
+
+      // ── One-time credit pack purchases (Phase 2A) ──────────────────
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session
+        // Only handle one-time payments — subscription checkouts are covered
+        // by customer.subscription.created/updated above.
+        if (session.mode !== 'payment') break
+
+        const userId = session.metadata?.supabase_user_id
+        const packKey = session.metadata?.pack_key as 'boost' | 'pulse' | 'surge' | undefined
+
+        if (!userId || !packKey || !(packKey in CREDIT_PACKS)) {
+          console.error('[webhook] Bad credit pack session metadata:', session.id, session.metadata)
+          break
+        }
+
+        const pack = CREDIT_PACKS[packKey]
+        const expiresAt = new Date(Date.now() + pack.expiryDays * 24 * 60 * 60 * 1000).toISOString()
+
+        // Idempotent insert: stripe_session_id is UNIQUE, so a webhook retry
+        // does NOT credit the user twice. Use INSERT … ON CONFLICT DO NOTHING.
+        const { error: insertErr } = await admin
+          .from('credit_addon_purchases')
+          .insert({
+            user_id:           userId,
+            pack_key:          packKey,
+            pack_size:         pack.credits,
+            credits_remaining: pack.credits,
+            amount_cad_cents:  session.amount_total ?? pack.price,
+            stripe_session_id: session.id,
+            stripe_payment_id: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+            expires_at:        expiresAt,
+          })
+
+        // unique_violation on stripe_session_id means this webhook already fired —
+        // silently ignore (idempotent retry).
+        if (insertErr && insertErr.code !== '23505') {
+          console.error('[webhook] addon insert failed:', insertErr.message)
+          return NextResponse.json({ error: 'Failed to record purchase' }, { status: 500 })
+        }
+
+        // The credit_addon_purchases row IS the audit trail (timestamps, amount,
+        // pack details all there). No separate credit_transactions entry needed.
+        console.log('[webhook] credit pack granted: user=%s pack=%s credits=%d expires=%s',
+          userId, packKey, pack.credits, expiresAt)
         break
       }
 

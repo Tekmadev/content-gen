@@ -19,12 +19,28 @@ export async function GET() {
   const plan = profile.subscription_plan
   const totalCredits = plan ? (plan_credits[plan] ?? null) : null
 
-  console.log('[profile] userId=%s plan=%s totalCredits=%s', user.id, plan, totalCredits)
+  // Active add-on packs (unexpired, unrefunded, with credits remaining).
+  // Used by /billing to show breakdown like "120 plan + 35 boost (expires Mar 1)".
+  const admin = createAdminClient()
+  const { data: addonPacks } = await admin
+    .from('credit_addon_purchases')
+    .select('id, pack_key, pack_size, credits_remaining, amount_cad_cents, expires_at, created_at')
+    .eq('user_id', user.id)
+    .gt('credits_remaining', 0)
+    .is('refunded_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .order('expires_at', { ascending: true })
+
+  const addonCredits = (addonPacks ?? []).reduce((sum, p) => sum + (p.credits_remaining ?? 0), 0)
+
+  console.log('[profile] userId=%s plan=%s totalCredits=%s addonCredits=%d', user.id, plan, totalCredits, addonCredits)
 
   return NextResponse.json({
     profile,
     totalCredits,
-    creditCosts: credit_costs ?? CREDIT_COSTS, // CREDIT_COSTS is the static fallback
+    creditCosts: credit_costs ?? CREDIT_COSTS,
+    addonCredits,
+    addonPacks: addonPacks ?? [],
     email: user.email,
   })
 }

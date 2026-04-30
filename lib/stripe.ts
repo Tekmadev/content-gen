@@ -45,3 +45,58 @@ export function planFromPriceId(priceId: string): string | null {
   }
   return null
 }
+
+// ── Top-up credit packs (one-time purchases) ─────────────────────────
+// Pack pricing is intentionally HIGHER per credit than the equivalent tier —
+// add-ons are for "I just need this month", not "I want to stay here forever".
+// Three Boost packs ($57) costs more than upgrading to Creator ($49 / 350 credits)
+// — that's the incentive for heavy users to upgrade their subscription instead.
+//
+// Required env vars (set in Vercel + .env.local):
+//   STRIPE_PRICE_BOOST — $19 CAD (one-time) → 50 credits
+//   STRIPE_PRICE_PULSE — $59 CAD (one-time) → 200 credits
+//   STRIPE_PRICE_SURGE — $129 CAD (one-time) → 500 credits
+
+export type CreditPackKey = 'boost' | 'pulse' | 'surge'
+
+export const CREDIT_PACKS: Record<CreditPackKey, {
+  name: string
+  priceId: string
+  price: number       // CAD cents
+  credits: number     // credits granted on purchase
+  expiryDays: number  // unused credits forfeit after this many days
+  description: string
+}> = {
+  boost: {
+    name: 'Boost',
+    priceId: process.env.STRIPE_PRICE_BOOST ?? '',
+    price: 1900,
+    credits: 50,
+    expiryDays: 90,
+    description: 'Quick top-up. 50 credits for $19.',
+  },
+  pulse: {
+    name: 'Pulse',
+    priceId: process.env.STRIPE_PRICE_PULSE ?? '',
+    price: 5900,
+    credits: 200,
+    expiryDays: 90,
+    description: 'Big push. 200 credits for $59.',
+  },
+  surge: {
+    name: 'Surge',
+    priceId: process.env.STRIPE_PRICE_SURGE ?? '',
+    price: 12900,
+    credits: 500,
+    expiryDays: 90,
+    description: 'Heavy month. 500 credits for $129.',
+  },
+}
+
+// Map a Stripe price ID back to our internal pack key
+export function packFromPriceId(priceId: string): CreditPackKey | null {
+  for (const [key, pack] of Object.entries(CREDIT_PACKS)) {
+    if (pack.priceId === priceId) return key as CreditPackKey
+  }
+  return null
+}

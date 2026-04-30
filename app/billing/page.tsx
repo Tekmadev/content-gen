@@ -97,20 +97,28 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 const PLAN_CREDITS: Record<string, number> = { starter: 120, creator: 350, pro: 800, agency: 2200 }
 
-function CreditBar({ used, total }: { used: number; total: number }) {
+function CreditBar({ used, total, addons = 0 }: { used: number; total: number; addons?: number }) {
+  // Bar reflects subscription usage only — add-ons are shown as a separate "+N" badge
+  // beside the remaining count, so users always know what's expiring.
   const pct = Math.min(100, Math.round((used / total) * 100))
-  const remaining = Math.max(0, total - used)
-  const isDanger  = pct >= 100
-  const isWarning = pct >= 80
+  const subscriptionRemaining = Math.max(0, total - used)
+  const totalAvailable = subscriptionRemaining + addons
+  const isDanger  = pct >= 100 && addons === 0
+  const isWarning = pct >= 80 && addons === 0
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center justify-between text-sm flex-wrap gap-2">
         <span className="font-medium text-[var(--foreground)]">
-          {remaining.toLocaleString()} credits remaining
+          {totalAvailable.toLocaleString()} credit{totalAvailable !== 1 ? 's' : ''} available
+          {addons > 0 && (
+            <span className="ml-2 text-xs font-medium text-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 rounded-full">
+              {subscriptionRemaining} plan + {addons} add-on
+            </span>
+          )}
         </span>
-        <span className={`font-semibold ${isDanger ? 'text-red-600' : isWarning ? 'text-orange-600' : 'text-[var(--muted)]'}`}>
-          {used.toLocaleString()} / {total.toLocaleString()} used
+        <span className={`font-semibold text-xs ${isDanger ? 'text-red-600' : isWarning ? 'text-orange-600' : 'text-[var(--muted)]'}`}>
+          {used.toLocaleString()} / {total.toLocaleString()} plan used
         </span>
       </div>
       <div className="w-full h-3 bg-[var(--surface)] rounded-full overflow-hidden border border-[var(--border)]">
@@ -120,38 +128,75 @@ function CreditBar({ used, total }: { used: number; total: number }) {
         />
       </div>
       {isDanger && (
-        <p className="text-xs text-red-600">You&apos;ve used all your credits this month. Upgrade to continue.</p>
+        <p className="text-xs text-red-600">
+          You&apos;ve used all your plan credits this month. Buy a credit pack below to keep going, or upgrade your plan.
+        </p>
       )}
       {isWarning && !isDanger && (
-        <p className="text-xs text-orange-600">Running low — consider upgrading before you hit the limit.</p>
+        <p className="text-xs text-orange-600">Running low — consider upgrading or buying a top-up pack below.</p>
       )}
     </div>
   )
 }
 
+interface AddonPack {
+  id: string
+  pack_key: 'boost' | 'pulse' | 'surge'
+  pack_size: number
+  credits_remaining: number
+  amount_cad_cents: number
+  expires_at: string
+  created_at: string
+}
+
 function BillingContent() {
   const searchParams = useSearchParams()
-  const success    = searchParams.get('success') === '1'
-  const canceled   = searchParams.get('canceled') === '1'
-  const isOnboarding = searchParams.get('onboarding') === '1'
+  const success           = searchParams.get('success') === '1'
+  const canceled          = searchParams.get('canceled') === '1'
+  const creditsPurchased  = searchParams.get('credits_purchased') === '1'
+  const creditsCanceled   = searchParams.get('credits_canceled') === '1'
+  const isOnboarding      = searchParams.get('onboarding') === '1'
 
-  const [profile,        setProfile]        = useState<Profile | null>(null)
-  const [creditCosts,    setCreditCosts]    = useState<CreditCosts | null>(null)
-  const [loading,        setLoading]        = useState(true)
+  const [profile,         setProfile]         = useState<Profile | null>(null)
+  const [creditCosts,     setCreditCosts]     = useState<CreditCosts | null>(null)
+  const [addonCredits,    setAddonCredits]    = useState(0)
+  const [addonPacks,      setAddonPacks]      = useState<AddonPack[]>([])
+  const [loading,         setLoading]         = useState(true)
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
-  const [portalLoading,  setPortalLoading]  = useState(false)
-  const [error,          setError]          = useState('')
+  const [packLoading,     setPackLoading]     = useState<string | null>(null)
+  const [portalLoading,   setPortalLoading]   = useState(false)
+  const [error,           setError]           = useState('')
 
   useEffect(() => {
     fetch('/api/profile')
       .then((r) => r.json())
-      .then(({ profile: p, creditCosts: cc }) => {
+      .then(({ profile: p, creditCosts: cc, addonCredits: ac, addonPacks: ap }) => {
         setProfile(p)
         setCreditCosts(cc)
+        setAddonCredits(ac ?? 0)
+        setAddonPacks(ap ?? [])
       })
       .catch(() => setError('Failed to load billing info'))
       .finally(() => setLoading(false))
-  }, [success])
+  }, [success, creditsPurchased])
+
+  async function buyCredits(packKey: string) {
+    setPackLoading(packKey)
+    setError('')
+    try {
+      const res = await fetch('/api/billing/buy-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packKey }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Purchase failed')
+      window.location.href = data.url
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Purchase failed')
+      setPackLoading(null)
+    }
+  }
 
   async function startCheckout(planKey: string) {
     setCheckoutLoading(planKey)
@@ -225,6 +270,19 @@ function BillingContent() {
             Checkout canceled. Your plan was not changed.
           </div>
         )}
+        {creditsPurchased && (
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-800 text-sm">
+            <svg className="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            Credits added to your account! They&apos;re ready to use immediately.
+          </div>
+        )}
+        {creditsCanceled && (
+          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-amber-800 text-sm">
+            Pack purchase canceled. No charge was made.
+          </div>
+        )}
         {error && (
           <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm">
             {error}
@@ -274,7 +332,7 @@ function BillingContent() {
                     <span className="font-semibold uppercase tracking-wide">Monthly Credits</span>
                     {resetDate && <span>Resets {resetDate}</span>}
                   </div>
-                  <CreditBar used={profile.credits_used} total={totalCredits} />
+                  <CreditBar used={profile.credits_used} total={totalCredits} addons={addonCredits} />
                 </div>
 
                 {creditCosts && (
@@ -307,29 +365,77 @@ function BillingContent() {
                     Need more credits?
                   </h2>
                   <p className="text-xs text-[var(--muted)] mt-1">
-                    Top up any time without changing your plan. Top-up credits roll over for 90 days.
+                    Top up any time without changing your plan. Add-on credits roll over for 90 days.
                   </p>
                 </div>
+
+                {/* Active packs (if any) — shows what they've already bought */}
+                {addonPacks.length > 0 && (
+                  <div className="flex flex-col gap-1.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl px-4 py-3">
+                    <p className="text-xs font-semibold text-[var(--foreground)]">Your active packs</p>
+                    {addonPacks.map((p) => {
+                      const expDate = new Date(p.expires_at)
+                      const daysLeft = Math.max(0, Math.ceil((expDate.getTime() - Date.now()) / 86_400_000))
+                      const expiringSoon = daysLeft <= 14
+                      return (
+                        <div key={p.id} className="flex items-center justify-between text-xs">
+                          <span className="text-[var(--foreground)] capitalize">
+                            {p.pack_key} — <strong>{p.credits_remaining}</strong> of {p.pack_size} credits
+                          </span>
+                          <span className={`text-xs ${expiringSoon ? 'text-orange-600 font-medium' : 'text-[var(--muted)]'}`}>
+                            expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {ADDONS.map((pack) => (
-                    <div
-                      key={pack.key}
-                      className="border border-[var(--border)] rounded-xl p-4 flex flex-col gap-2 hover:border-[var(--primary)]/40 transition-colors"
-                    >
-                      <div className="flex items-baseline justify-between">
-                        <p className="font-bold text-[var(--foreground)]">{pack.name}</p>
-                        <span className="text-lg font-bold text-[var(--primary)]">{pack.price}</span>
-                      </div>
-                      <p className="text-sm text-[var(--foreground)]">+{pack.credits} credits</p>
-                      <button
-                        disabled
-                        className="mt-1 w-full py-2 rounded-lg text-xs font-semibold bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)] cursor-not-allowed"
-                        title="Coming soon"
+                  {ADDONS.map((pack) => {
+                    const isLoading = packLoading === pack.key
+                    const isPopular = pack.key === 'pulse'
+                    return (
+                      <div
+                        key={pack.key}
+                        className={`border rounded-xl p-4 flex flex-col gap-2 transition-colors relative ${
+                          isPopular
+                            ? 'border-[var(--primary)]/60 bg-[var(--primary)]/5'
+                            : 'border-[var(--border)] hover:border-[var(--primary)]/40'
+                        }`}
                       >
-                        Coming soon
-                      </button>
-                    </div>
-                  ))}
+                        {isPopular && (
+                          <span className="absolute -top-2 left-3 bg-[var(--primary)] text-white text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
+                            Best Value
+                          </span>
+                        )}
+                        <div className="flex items-baseline justify-between">
+                          <p className="font-bold text-[var(--foreground)]">{pack.name}</p>
+                          <span className="text-lg font-bold text-[var(--primary)]">{pack.price}</span>
+                        </div>
+                        <p className="text-sm text-[var(--foreground)]">+{pack.credits} credits</p>
+                        <p className="text-[10px] text-[var(--muted)]">
+                          ${(parseInt(pack.price.replace('$', '')) / pack.credits).toFixed(2)}/credit · 90-day expiry
+                        </p>
+                        <button
+                          onClick={() => buyCredits(pack.key)}
+                          disabled={isLoading || !!packLoading || !!checkoutLoading}
+                          className={`mt-1 w-full py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                            isPopular
+                              ? 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)]'
+                              : 'bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--border)] border border-[var(--border)]'
+                          }`}
+                        >
+                          {isLoading ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              Loading…
+                            </span>
+                          ) : `Buy ${pack.name}`}
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
                 <p className="text-[11px] text-[var(--muted)]">
                   Heavy use every month? Upgrading your plan is usually a better deal per credit.
