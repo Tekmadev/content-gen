@@ -7,10 +7,16 @@ import AppShell from '@/components/AppShell'
 import UserAvatar from '@/components/UserAvatar'
 import type { BrandSettings, BrandBrief } from '@/lib/types'
 import Link from 'next/link'
+import SmartFeedbackModal from '@/components/SmartFeedbackModal'
 
-// ── Feedback Modal ────────────────────────────────────────────────────────
+// ── Legacy Feedback Modal (kept for reference, unused) ────────────────────
+// The settings page now uses SmartFeedbackModal — a category-driven smart
+// form that captures bug/feature/usability/etc. context. The function below
+// is kept so the file still parses if anyone references it; it's no longer
+// rendered.
 
-function FeedbackModal({
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _LegacyFeedbackModal({
   user,
   onClose,
 }: {
@@ -326,7 +332,7 @@ export default function SettingsPage() {
 
   return (
     <AppShell user={user}>
-      {feedbackOpen && <FeedbackModal user={user} onClose={() => setFeedbackOpen(false)} />}
+      {feedbackOpen && <SmartFeedbackModal user={user} onClose={() => setFeedbackOpen(false)} />}
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
         <h1 className="text-xl font-semibold">Settings</h1>
 

@@ -44,6 +44,27 @@ interface FeedbackEntry {
   referrer: string | null
   ip_address: string | null
   created_at: string
+  // ── Smart-form fields ────────────────────────────────────────────────
+  category: string | null
+  severity: string | null
+  feature_area: string | null
+  device_type: string | null
+  viewport_width: number | null
+  viewport_height: number | null
+  subscription_plan: string | null
+  current_url: string | null
+  expected_behavior: string | null
+  actual_behavior: string | null
+  steps_to_reproduce: string | null
+  desired_outcome: string | null
+  would_pay_for: boolean | null
+  nps_score: number | null
+  contact_back: boolean | null
+  app_version: string | null
+  usage_frequency: string | null
+  creator_type: string | null
+  status: string | null
+  admin_notes: string | null
 }
 
 interface AdminUser {
@@ -843,6 +864,50 @@ export default function AdminPage() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-sm text-[var(--foreground)]">{f.name || 'Anonymous'}</span>
                               {f.email && <span className="text-xs text-[var(--muted)]">{f.email}</span>}
+                              {f.category && (
+                                <span className="text-[10px] uppercase font-bold bg-[var(--primary)]/10 text-[var(--primary)] px-1.5 py-0.5 rounded">
+                                  {f.category.replace('_',' ')}
+                                </span>
+                              )}
+                              {f.severity && (
+                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                                  f.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                                  f.severity === 'high'     ? 'bg-orange-100 text-orange-700' :
+                                  f.severity === 'medium'   ? 'bg-amber-100 text-amber-700' :
+                                                              'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {f.severity}
+                                </span>
+                              )}
+                              {f.feature_area && (
+                                <span className="text-[10px] uppercase font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                  {f.feature_area}
+                                </span>
+                              )}
+                              {f.subscription_plan && (
+                                <span className="text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
+                                  {f.subscription_plan}
+                                </span>
+                              )}
+                              {f.would_pay_for === true && (
+                                <span className="text-[10px] uppercase font-bold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
+                                  💰 would pay
+                                </span>
+                              )}
+                              {f.contact_back && (
+                                <span className="text-[10px] uppercase font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                  📧 contact back
+                                </span>
+                              )}
+                              {f.nps_score != null && (
+                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                                  f.nps_score >= 9 ? 'bg-green-100 text-green-700' :
+                                  f.nps_score >= 7 ? 'bg-yellow-100 text-yellow-700' :
+                                                     'bg-red-100 text-red-700'
+                                }`}>
+                                  NPS {f.nps_score}
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm text-[var(--foreground)] mt-1 line-clamp-2">{f.message}</p>
                           </div>
@@ -870,21 +935,60 @@ export default function AdminPage() {
                               <p className="text-sm text-[var(--foreground)] whitespace-pre-wrap">{f.message}</p>
                             </div>
 
-                            {/* Device info grid */}
+                            {/* Bug-specific fields */}
+                            {(f.expected_behavior || f.actual_behavior || f.steps_to_reproduce) && (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                {f.expected_behavior && (
+                                  <div className="bg-white rounded-lg border border-[var(--border)] p-3">
+                                    <p className="text-xs font-semibold uppercase text-[var(--muted)] mb-1">Expected</p>
+                                    <p className="text-xs text-[var(--foreground)] whitespace-pre-wrap">{f.expected_behavior}</p>
+                                  </div>
+                                )}
+                                {f.actual_behavior && (
+                                  <div className="bg-white rounded-lg border border-[var(--border)] p-3">
+                                    <p className="text-xs font-semibold uppercase text-[var(--muted)] mb-1">Actual</p>
+                                    <p className="text-xs text-[var(--foreground)] whitespace-pre-wrap">{f.actual_behavior}</p>
+                                  </div>
+                                )}
+                                {f.steps_to_reproduce && (
+                                  <div className="bg-white rounded-lg border border-[var(--border)] p-3">
+                                    <p className="text-xs font-semibold uppercase text-[var(--muted)] mb-1">Steps to reproduce</p>
+                                    <p className="text-xs text-[var(--foreground)] whitespace-pre-wrap font-mono">{f.steps_to_reproduce}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Feature-request-specific fields */}
+                            {f.desired_outcome && (
+                              <div className="bg-white rounded-lg border border-[var(--border)] p-3">
+                                <p className="text-xs font-semibold uppercase text-[var(--muted)] mb-1">Desired outcome</p>
+                                <p className="text-xs text-[var(--foreground)] whitespace-pre-wrap">{f.desired_outcome}</p>
+                              </div>
+                            )}
+
+                            {/* User context grid */}
                             <div>
-                              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)] mb-2">Device & Network</p>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)] mb-2">User & Device Context</p>
                               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 {[
-                                  { label: 'IP Address',   value: f.ip_address },
-                                  { label: 'Platform',     value: f.platform },
-                                  { label: 'Screen',       value: f.screen_size },
-                                  { label: 'Language',     value: f.language },
-                                  { label: 'Timezone',     value: f.timezone },
-                                  { label: 'Referrer',     value: f.referrer || 'Direct' },
+                                  { label: 'Plan',          value: f.subscription_plan },
+                                  { label: 'Creator type',  value: f.creator_type },
+                                  { label: 'Usage',         value: f.usage_frequency },
+                                  { label: 'Page',          value: f.current_url },
+                                  { label: 'Device',        value: f.device_type },
+                                  { label: 'Viewport',      value: f.viewport_width && f.viewport_height ? `${f.viewport_width}×${f.viewport_height}` : null },
+                                  { label: 'IP Address',    value: f.ip_address },
+                                  { label: 'Platform',      value: f.platform },
+                                  { label: 'Screen',        value: f.screen_size },
+                                  { label: 'Language',      value: f.language },
+                                  { label: 'Timezone',      value: f.timezone },
+                                  { label: 'Referrer',      value: f.referrer || 'Direct' },
+                                  { label: 'App version',   value: f.app_version },
                                 ].map(({ label, value }) => value ? (
                                   <div key={label} className="bg-white rounded-lg border border-[var(--border)] px-3 py-2">
                                     <p className="text-xs text-[var(--muted)]">{label}</p>
-                                    <p className="text-xs font-medium text-[var(--foreground)] truncate mt-0.5">{value}</p>
+                                    <p className="text-xs font-medium text-[var(--foreground)] truncate mt-0.5" title={value}>{value}</p>
                                   </div>
                                 ) : null)}
                               </div>
