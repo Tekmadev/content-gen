@@ -82,7 +82,7 @@ export default function TermsPage() {
               All prices are exclusive of applicable taxes. You are responsible for any taxes, duties, or levies imposed by your jurisdiction.
             </p>
             <p>
-              Subscriptions automatically renew unless cancelled before the renewal date. You may cancel at any time through the billing portal. Cancellation takes effect at the end of the current billing period — no refunds are issued for partial months.
+              Subscriptions automatically renew unless cancelled before the renewal date. You may cancel at any time through the billing portal — cancellation takes effect at the end of the current billing period. We offer a prorated refund of your first subscription payment within 7 days of purchase if you&apos;re unsatisfied; contact info@tekmadev.com to request one. No refunds are issued for subsequent renewals or for one-time credit pack purchases once credits have been added to your account.
             </p>
             <p>
               We reserve the right to modify pricing with at least 30 days' written notice via email. Continued use after a price change constitutes acceptance of the new pricing.

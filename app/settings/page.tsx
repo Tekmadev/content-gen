@@ -219,6 +219,60 @@ export default function SettingsPage() {
     app_metadata?: { provider?: string }
   } | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [deleteOpen, setDeleteOpen]       = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError]     = useState('')
+
+  async function handleExportData() {
+    setExportLoading(true)
+    try {
+      const res = await fetch('/api/account/export')
+      if (!res.ok) throw new Error('Export failed')
+      // Stream to a download link without buffering the whole payload in memory
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `content-manager-export-${Date.now()}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Export error:', err)
+      alert('Could not export your data. Please try again.')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteError('')
+    if (deleteConfirm !== 'DELETE MY ACCOUNT') {
+      setDeleteError('Type "DELETE MY ACCOUNT" to confirm.')
+      return
+    }
+    setDeleteLoading(true)
+    try {
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: deleteConfirm }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Delete failed')
+      }
+      // Sign out client-side and redirect to home
+      await supabase.auth.signOut()
+      router.push('/?deleted=1')
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed')
+      setDeleteLoading(false)
+    }
+  }
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loadingAccounts, setLoadingAccounts] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -831,7 +885,100 @@ export default function SettingsPage() {
             Send Feedback
           </button>
         </section>
+
+        {/* Privacy & Data — GDPR / PIPEDA rights */}
+        <section className="bg-white rounded-2xl border border-[var(--border)] p-5 sm:p-6 flex flex-col gap-4">
+          <div>
+            <h2 className="font-semibold text-sm uppercase tracking-wide text-[var(--muted)]">Privacy &amp; Data</h2>
+            <p className="text-xs text-[var(--muted)] mt-1">
+              Download everything we store about you, or permanently delete your account.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={handleExportData}
+              disabled={exportLoading}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[var(--border)] rounded-lg text-sm font-medium hover:bg-[var(--surface)] transition-colors disabled:opacity-50"
+            >
+              {exportLoading
+                ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                )
+              }
+              {exportLoading ? 'Exporting…' : 'Download my data (JSON)'}
+            </button>
+            <button
+              onClick={() => { setDeleteOpen(true); setDeleteConfirm(''); setDeleteError('') }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-red-300 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+              </svg>
+              Delete my account
+            </button>
+          </div>
+        </section>
       </div>
+
+      {/* Delete-account confirmation modal */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !deleteLoading && setDeleteOpen(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="px-5 py-4 border-b border-[var(--border)]">
+              <p className="font-semibold text-[var(--foreground)]">Delete account permanently?</p>
+              <p className="text-xs text-[var(--muted)] mt-0.5">This cannot be undone.</p>
+            </div>
+            <div className="p-5 flex flex-col gap-3 text-sm">
+              <p className="text-[var(--foreground)]">
+                We&apos;ll cancel any active subscription, delete every post, carousel, brand brief,
+                feedback entry, and uploaded image, and remove your account from our system.
+              </p>
+              <p className="text-[var(--muted)] text-xs">
+                Stripe payment records are retained for tax and audit compliance as required by law.
+              </p>
+              <label className="flex flex-col gap-1 mt-2">
+                <span className="text-xs font-medium text-[var(--foreground)]">
+                  Type <span className="font-mono bg-[var(--surface)] px-1.5 py-0.5 rounded text-red-700">DELETE MY ACCOUNT</span> to confirm:
+                </span>
+                <input
+                  type="text"
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="DELETE MY ACCOUNT"
+                  disabled={deleteLoading}
+                />
+              </label>
+              {deleteError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{deleteError}</p>
+              )}
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleteLoading}
+                  className="flex-1 px-4 py-2.5 border border-[var(--border)] rounded-lg text-sm font-medium hover:bg-[var(--surface)] transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleteLoading || deleteConfirm !== 'DELETE MY ACCOUNT'}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deleteLoading && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                  {deleteLoading ? 'Deleting…' : 'Delete forever'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   )
 }
